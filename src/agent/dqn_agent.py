@@ -145,14 +145,14 @@ class DQNAgent:
         print("DQN training complete.")
         return rewards_history
 
-    def save_weights(self, path=settings.MODEL_SAVE_PATH):
+    def save_weights(self, path=None):
         """
         Saves the Q-network weights.
         """
         self.q_net.save_weights(path)
         print(f"DQN model weights saved to {path}")
 
-    def load_weights(self, path=settings.MODEL_SAVE_PATH):
+    def load_weights(self, path=None):
         """
         Loads Q-network weights.
         """

@@ -11,7 +11,7 @@ class DoubleDQNAgent(DQNAgent):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # Override the model save path for Double DQN
-        self.model_save_path = settings.DOUBLE_DQN_MODEL_SAVE_PATH
+        self.model_save_path = None
         print("DoubleDQNAgent initialized.")
 
     @tf.function
@@ -48,13 +48,13 @@ class DoubleDQNAgent(DQNAgent):
         self.optimizer.apply_gradients(zip(grads, self.q_net.trainable_variables))
         return loss
 
-    def save_weights(self, path=settings.DOUBLE_DQN_MODEL_SAVE_PATH):
+    def save_weights(self, path=None):
         """
         Saves the Q-network weights for Double DQN.
         """
         super().save_weights(path)
 
-    def load_weights(self, path=settings.DOUBLE_DQN_MODEL_SAVE_PATH):
+    def load_weights(self, path=None):
         """
         Loads Q-network weights for Double DQN.
         """

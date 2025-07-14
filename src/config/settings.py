@@ -21,7 +21,3 @@ REPLAY_BUFFER_CAPACITY = 10000
 
 # Target network update frequency
 TARGET_UPDATE_FREQ = 250
-
-# Model saving/loading paths
-MODEL_SAVE_PATH = "models/dqn_blackjack.h5"
-DOUBLE_DQN_MODEL_SAVE_PATH = "models/double_dqn_blackjack.h5"
