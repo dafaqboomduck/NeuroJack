@@ -1,7 +1,8 @@
 import numpy as np
+import random
+# Assuming Card, Deck, PlayerHand are imported from their respective files
 from src.env.playerhand import PlayerHand
 from src.env.deck import Deck
-import random
 
 class CustomBlackjackEnv:
     """
@@ -28,7 +29,7 @@ class CustomBlackjackEnv:
         self.blackjack_payout = blackjack_payout
         self.allow_doubling = allow_doubling
         self.allow_splitting = allow_splitting
-        self.count_cards = count_cards
+        self.count_cards = count_cards # This is the crucial flag
         self.seed = seed
         self.render_mode = render_mode
 
@@ -53,6 +54,7 @@ class CustomBlackjackEnv:
 
     @property
     def state_size(self):
+        # This property dynamically returns the correct state size
         return 4 if self.count_cards else 3
 
     @property
@@ -91,7 +93,9 @@ class CustomBlackjackEnv:
         return card
 
     def _get_obs(self):
+        # Return observation based on whether card counting is enabled
         if not (0 <= self.current_hand_index < len(self.player_hands)):
+            # Return appropriate zero observation for terminal state
             return (0, 0, 0, 0) if self.count_cards else (0, 0, 0)
 
         current_player_hand_cards = self.player_hands[self.current_hand_index].cards
@@ -212,6 +216,7 @@ class CustomBlackjackEnv:
         if current_hand_resolved:
             done = self._advance_to_next_hand_or_resolve_game()
 
+        # Determine the next_observation based on self.count_cards
         next_observation = (0, 0, 0, 0) if self.count_cards else (0, 0, 0)
         if not done:
             next_observation = self._get_obs()

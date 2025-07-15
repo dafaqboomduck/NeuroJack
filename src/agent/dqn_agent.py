@@ -7,20 +7,20 @@ import random
 
 from src.model.q_model import build_q_model
 from src.memory.replay_buffer import ReplayBuffer
-# Removed: from src.utils.helpers import preprocess_state # No longer needed, as it's a method now
 from src.config import settings
 
 class DQNAgent:
     def __init__(self,
-                 state_size=settings.STATE_SIZE,
-                 num_actions=settings.NUM_ACTIONS,
+                 state_size, # This will now be passed dynamically from env.state_size
+                 num_actions, # This will now be passed dynamically from env.num_actions
                  learning_rate=settings.LEARNING_RATE,
                  gamma=settings.GAMMA,
                  epsilon_start=settings.EPSILON_START,
                  epsilon_end=settings.EPSILON_END,
                  epsilon_decay=settings.EPSILON_DECAY,
                  replay_buffer_capacity=settings.REPLAY_BUFFER_CAPACITY,
-                 target_update_freq=settings.TARGET_UPDATE_FREQ):
+                 target_update_freq=settings.TARGET_UPDATE_FREQ,
+                 use_card_count=False): # New parameter to indicate if card counting is used
 
         self.state_size = state_size
         self.num_actions = num_actions
@@ -29,10 +29,11 @@ class DQNAgent:
         self.epsilon_end = epsilon_end
         self.epsilon_decay = epsilon_decay
         self.target_update_freq = target_update_freq
+        self.use_card_count = use_card_count # Store this flag
 
-        # Build Q-networks
-        self.q_net = build_q_model(input_shape=(state_size,), num_actions=num_actions)
-        self.target_q_net = build_q_model(input_shape=(state_size,), num_actions=num_actions)
+        # Build Q-networks with the dynamically determined state_size
+        self.q_net = build_q_model(input_shape=(self.state_size,), num_actions=self.num_actions)
+        self.target_q_net = build_q_model(input_shape=(self.state_size,), num_actions=self.num_actions)
         self.target_q_net.set_weights(self.q_net.get_weights()) # Initialize target network to be same as q_net
 
         # Optimizer and Loss
@@ -42,39 +43,38 @@ class DQNAgent:
         # Replay Buffer
         self.replay_buffer = ReplayBuffer(capacity=replay_buffer_capacity)
 
-    def _preprocess_state(self, state, use_card_count=False):
+    def _preprocess_state(self, state):
         """
         Convert state tuple into a normalized float32 vector.
-
-        Args:
-            state: Tuple of environment state.
-            use_card_count (bool): Whether to include running_count in the state.
-
-        Returns:
-            np.array: Normalized state vector.
+        This method now uses self.use_card_count to determine expected state size.
         """
-        if use_card_count:
+        if self.use_card_count:
             if len(state) != 4:
-                raise ValueError(f"Expected 4 values in state, got {len(state)}: {state}")
+                raise ValueError(f"Expected 4 values in state for card counting, got {len(state)}: {state}")
             player_sum, dealer_card, usable_ace, running_count = state
         else:
             if len(state) != 3:
-                raise ValueError(f"Expected 3 values in state, got {len(state)}: {state}")
+                # This is the line that was causing the error if self.use_card_count was True
+                # but the state was actually 3 elements.
+                # The logic here is correct if self.use_card_count is correctly False.
+                raise ValueError(f"Expected 3 values in state without card counting, got {len(state)}: {state}")
             player_sum, dealer_card, usable_ace = state
+            running_count = 0 # Default if not using card count, to allow consistent state_vector construction
 
         # Normalize
         state_vector = [
-            (player_sum - 12) / (21 - 12),        # Player sum normalized
-            (dealer_card - 1) / (10 - 1),         # Dealer card normalized
-            float(usable_ace)                     # Usable ace as float
+            (player_sum - 12) / (21 - 12),       # Player sum normalized (assuming min 12, max 21 relevant for player)
+            (dealer_card - 1) / (10 - 1),        # Normalized dealer card (1-10, Ace is 11, so 1-11 range for observation)
+            float(usable_ace)                    # Binary feature
         ]
 
-        if use_card_count:
-            max_running_count_abs = 20 * 6  # Adjust based on number of decks
+        if self.use_card_count:
+            # Use settings.NUM_DECKS for consistency in normalization
+            max_running_count_abs = settings.NUM_DECKS * 20 # Max absolute count for NUM_DECKS (approx)
             state_vector.append(running_count / max_running_count_abs)
 
         return np.array(state_vector, dtype=np.float32)
-    
+
     def choose_action(self, state):
         """
         Chooses an action using an epsilon-greedy policy.
@@ -142,27 +142,20 @@ class DQNAgent:
 
         for episode in range(num_episodes):
             obs, _ = env.reset()
-            state = self._preprocess_state(obs) # Use self._preprocess_state
+            state = self._preprocess_state(obs) # No longer pass use_card_count here
             done = False
             total_reward = 0
 
             while not done:
                 action = self.choose_action(state)
                 next_state_raw, reward, done, _ = env.step(action)
-                next_state = self._preprocess_state(next_state_raw) # Use self._preprocess_state
+                next_state = self._preprocess_state(next_state_raw) # No longer pass use_card_count here
 
                 self.remember(state, action, reward, next_state, done)
                 self.learn(batch_size)
 
                 state = next_state
                 total_reward += reward
-
-                # The batch sampling and training is already handled by self.learn()
-                # This block is redundant if self.learn() is called every step
-                # if len(self.replay_buffer) > batch_size:
-                #     states_batch, actions_batch, rewards_batch, next_states_batch, dones_batch = \
-                #         self.replay_buffer.sample(batch_size)
-                #     self._train_step(states_batch, actions_batch, rewards_batch, next_states_batch, dones_batch)
 
             self.epsilon = max(self.epsilon_end, self.epsilon * self.epsilon_decay)
             self.update_target_model() # Update target network every episode
@@ -197,13 +190,13 @@ class DQNAgent:
 
         for episode in range(num_eval_episodes):
             raw_state, _ = environment.reset()
-            state = self._preprocess_state(raw_state) # Use self._preprocess_state
+            state = self._preprocess_state(raw_state) # No longer pass use_card_count here
             done = False
 
             while not done:
                 action = self.choose_action(state)  # Agent acts greedily based on Q-values
                 next_state_raw, reward, done, _ = environment.step(action)
-                state = self._preprocess_state(next_state_raw) # Use self._preprocess_state
+                state = self._preprocess_state(next_state_raw) # No longer pass use_card_count here
 
             if reward == 1:
                 wins += 1
@@ -247,3 +240,4 @@ class DQNAgent:
             print(f"DQN model weights loaded from {path}")
         except Exception as e:
             print(f"Error loading DQN model weights from {path}: {e}")
+
