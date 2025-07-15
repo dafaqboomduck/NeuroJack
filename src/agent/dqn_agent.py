@@ -98,7 +98,7 @@ class DQNAgent:
         Trains the DQN agent in the given environment.
 
         Args:
-            env: The environment to train in (e.g., gym.make("Blackjack-v1")).
+            env: The environment to train in (your CustomBlackjackEnv instance).
             num_episodes: Total number of episodes to train for.
             batch_size: Size of the batch to sample from the replay buffer.
             log_interval: How often to print training progress (in episodes).
@@ -110,6 +110,7 @@ class DQNAgent:
 
         # print(f"Starting DQN training for {num_episodes} episodes...")
         for episode in range(num_episodes):
+            # Reset now returns (observation, info)
             obs, _ = env.reset()
             state = preprocess_state(obs)
             done = False
@@ -118,8 +119,10 @@ class DQNAgent:
 
             while not done:
                 action = self.choose_action(state)
-                next_state_raw, reward, terminated, truncated, _ = env.step(action)
-                done = terminated or truncated
+                # Removed 'truncated' from the unpacking
+                next_state_raw, reward, done, _ = env.step(action) # Removed 'terminated' and 'truncated'
+                # 'done' from CustomBlackjackEnv's step already indicates if the episode is over
+                # No need for 'terminated or truncated'
                 next_state = preprocess_state(next_state_raw)
 
                 self.remember(state, action, reward, next_state, done)

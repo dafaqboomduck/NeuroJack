@@ -1,9 +1,9 @@
 # blackjack_rl/config/settings.py
 
 # Environment settings
-NUM_DECKS = 1  # From original gym.make, sab=True implies single deck dynamics with specific rules
-STATE_SIZE = 3
-NUM_ACTIONS = 2  # Hit or Stand
+NUM_DECKS = 6
+STATE_SIZE = 4  # (player_sum, dealer_card_showing, usable_ace, running_count)
+NUM_ACTIONS = 4 # (Stand, Hit, Double Down, Split)
 
 # Training parameters
 NUM_EPISODES = 100000
