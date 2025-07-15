@@ -9,7 +9,7 @@ NUM_ACTIONS = 4 # (Stand, Hit, Double Down, Split)
 NUM_EPISODES = 100000
 BATCH_SIZE = 64
 GAMMA = 0.99
-LEARNING_RATE = 5e-4
+LEARNING_RATE = 1e-4
 
 # Epsilon-greedy policy parameters
 EPSILON_START = 1.0
