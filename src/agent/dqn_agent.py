@@ -108,7 +108,7 @@ class DQNAgent:
         """
         rewards_history = []
 
-        print(f"Starting DQN training for {num_episodes} episodes...")
+        # print(f"Starting DQN training for {num_episodes} episodes...")
         for episode in range(num_episodes):
             obs, _ = env.reset()
             state = preprocess_state(obs)
@@ -142,7 +142,7 @@ class DQNAgent:
                 avg_reward = np.mean(rewards_history[-log_interval:])
                 print(f"Episode {episode + 1}/{num_episodes}, Avg Reward (last {log_interval}): {avg_reward:.4f}, Epsilon: {self.epsilon:.3f}")
 
-        print("DQN training complete.")
+        # print("DQN training complete.")
         return rewards_history
 
     def save_weights(self, path=None):

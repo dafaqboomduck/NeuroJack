@@ -7,6 +7,7 @@ def preprocess_state(state):
     Convert state tuple into a normalized float32 vector.
     state = (player_sum: int, dealer_card: int, usable_ace: bool)
     """
+    
     player_sum, dealer_card, usable_ace = state
     return np.array([
         (player_sum - 12) / (21 - 12),       # Normalized player sum
@@ -32,12 +33,14 @@ def evaluate_agent_in_notebook(agent_instance, environment, num_eval_episodes):
     agent_instance.epsilon = 0.0
 
     for episode in range(num_eval_episodes):
-        state = preprocess_state(environment.reset())
+        raw_state, _ = environment.reset()  # Unpack the first tuple and ignore the dict
+        state = preprocess_state(raw_state)
         done = False
 
         while not done:
-            action = agent_instance.choose_action(state) # Agent acts greedily based on Q-values
-            next_state_raw, reward, done, _ = environment.step(action)
+            action = agent_instance.choose_action(state)  # Agent acts greedily based on Q-values
+            next_state_raw, reward, terminated, truncated, _ = environment.step(action)
+            done = terminated or truncated
             state = preprocess_state(next_state_raw)
 
         if reward == 1:

@@ -38,7 +38,7 @@ class DoubleDQNAgent(DQNAgent):
             max_next_q = tf.gather_nd(next_q_values_target, selected_next_action_indices)
 
             # Calculate target Q-values
-            targets = rewards + (1 - dones) * self.gamma * max_next_q
+            targets = tf.cast(rewards, tf.float32) + (1.0 - tf.cast(dones, tf.float32)) * self.gamma * max_next_q
 
             # Calculate loss
             loss = self.loss_fn(targets, predicted_q_values)
