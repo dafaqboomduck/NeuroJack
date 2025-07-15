@@ -7,7 +7,7 @@ import random
 
 from src.model.q_model import build_q_model
 from src.memory.replay_buffer import ReplayBuffer
-from src.utils.helpers import preprocess_state
+# Removed: from src.utils.helpers import preprocess_state # No longer needed, as it's a method now
 from src.config import settings
 
 class DQNAgent:
@@ -42,6 +42,39 @@ class DQNAgent:
         # Replay Buffer
         self.replay_buffer = ReplayBuffer(capacity=replay_buffer_capacity)
 
+    def _preprocess_state(self, state, use_card_count=False):
+        """
+        Convert state tuple into a normalized float32 vector.
+
+        Args:
+            state: Tuple of environment state.
+            use_card_count (bool): Whether to include running_count in the state.
+
+        Returns:
+            np.array: Normalized state vector.
+        """
+        if use_card_count:
+            if len(state) != 4:
+                raise ValueError(f"Expected 4 values in state, got {len(state)}: {state}")
+            player_sum, dealer_card, usable_ace, running_count = state
+        else:
+            if len(state) != 3:
+                raise ValueError(f"Expected 3 values in state, got {len(state)}: {state}")
+            player_sum, dealer_card, usable_ace = state
+
+        # Normalize
+        state_vector = [
+            (player_sum - 12) / (21 - 12),        # Player sum normalized
+            (dealer_card - 1) / (10 - 1),         # Dealer card normalized
+            float(usable_ace)                     # Usable ace as float
+        ]
+
+        if use_card_count:
+            max_running_count_abs = 20 * 6  # Adjust based on number of decks
+            state_vector.append(running_count / max_running_count_abs)
+
+        return np.array(state_vector, dtype=np.float32)
+    
     def choose_action(self, state):
         """
         Chooses an action using an epsilon-greedy policy.
@@ -61,7 +94,7 @@ class DQNAgent:
     def _train_step(self, states, actions, rewards, next_states, dones):
         actions = tf.cast(actions, tf.int32)
         rewards = tf.cast(rewards, tf.float32)
-        dones = tf.cast(dones, tf.float32)  # 🔧 Fix: cast boolean to float
+        dones = tf.cast(dones, tf.float32)
 
         next_q_values = self.target_q_net(next_states)
         max_next_q = tf.reduce_max(next_q_values, axis=1)
@@ -91,7 +124,6 @@ class DQNAgent:
         states, actions, rewards, next_states, dones = self.replay_buffer.sample(batch_size)
         self._train_step(states, actions, rewards, next_states, dones)
 
-
     def fit(self, env, num_episodes=settings.NUM_EPISODES, batch_size=settings.BATCH_SIZE,
         log_interval=settings.TARGET_UPDATE_FREQ):
         """
@@ -108,22 +140,16 @@ class DQNAgent:
         """
         rewards_history = []
 
-        # print(f"Starting DQN training for {num_episodes} episodes...")
         for episode in range(num_episodes):
-            # Reset now returns (observation, info)
             obs, _ = env.reset()
-            state = preprocess_state(obs)
+            state = self._preprocess_state(obs) # Use self._preprocess_state
             done = False
             total_reward = 0
 
-
             while not done:
                 action = self.choose_action(state)
-                # Removed 'truncated' from the unpacking
-                next_state_raw, reward, done, _ = env.step(action) # Removed 'terminated' and 'truncated'
-                # 'done' from CustomBlackjackEnv's step already indicates if the episode is over
-                # No need for 'terminated or truncated'
-                next_state = preprocess_state(next_state_raw)
+                next_state_raw, reward, done, _ = env.step(action)
+                next_state = self._preprocess_state(next_state_raw) # Use self._preprocess_state
 
                 self.remember(state, action, reward, next_state, done)
                 self.learn(batch_size)
@@ -131,10 +157,12 @@ class DQNAgent:
                 state = next_state
                 total_reward += reward
 
-                if len(self.replay_buffer) > batch_size:
-                    states_batch, actions_batch, rewards_batch, next_states_batch, dones_batch = \
-                        self.replay_buffer.sample(batch_size)
-                    self._train_step(states_batch, actions_batch, rewards_batch, next_states_batch, dones_batch)
+                # The batch sampling and training is already handled by self.learn()
+                # This block is redundant if self.learn() is called every step
+                # if len(self.replay_buffer) > batch_size:
+                #     states_batch, actions_batch, rewards_batch, next_states_batch, dones_batch = \
+                #         self.replay_buffer.sample(batch_size)
+                #     self._train_step(states_batch, actions_batch, rewards_batch, next_states_batch, dones_batch)
 
             self.epsilon = max(self.epsilon_end, self.epsilon * self.epsilon_decay)
             self.update_target_model() # Update target network every episode
@@ -145,8 +173,62 @@ class DQNAgent:
                 avg_reward = np.mean(rewards_history[-log_interval:])
                 print(f"Episode {episode + 1}/{num_episodes}, Avg Reward (last {log_interval}): {avg_reward:.4f}, Epsilon: {self.epsilon:.3f}")
 
-        # print("DQN training complete.")
         return rewards_history
+
+    def evaluate(self, environment, num_eval_episodes):
+        """
+        Evaluates the agent's performance in the given environment.
+
+        Args:
+            environment: The environment to evaluate in (your CustomBlackjackEnv instance).
+            num_eval_episodes: The number of episodes to run for evaluation.
+
+        Returns:
+            tuple: (win_rate, push_rate, loss_rate)
+        """
+        print(f"Starting evaluation for {num_eval_episodes} episodes...")
+        wins = 0
+        pushes = 0
+        losses = 0
+
+        # Temporarily set epsilon to 0 for evaluation (no exploration)
+        original_epsilon = self.epsilon
+        self.epsilon = 0.0 # Agent acts greedily during evaluation
+
+        for episode in range(num_eval_episodes):
+            raw_state, _ = environment.reset()
+            state = self._preprocess_state(raw_state) # Use self._preprocess_state
+            done = False
+
+            while not done:
+                action = self.choose_action(state)  # Agent acts greedily based on Q-values
+                next_state_raw, reward, done, _ = environment.step(action)
+                state = self._preprocess_state(next_state_raw) # Use self._preprocess_state
+
+            if reward == 1:
+                wins += 1
+            elif reward == 0:
+                pushes += 1
+            else: # reward == -1
+                losses += 1
+
+            if (episode + 1) % 1000 == 0:
+                print(f"  Evaluation episode {episode + 1}/{num_eval_episodes}")
+
+        self.epsilon = original_epsilon # Restore original epsilon
+
+        total_episodes = wins + pushes + losses
+        win_rate = wins / total_episodes
+        push_rate = pushes / total_episodes
+        loss_rate = losses / total_episodes
+
+        print("\n--- Evaluation Results ---")
+        print(f"Total Episodes: {total_episodes}")
+        print(f"Wins: {wins} ({win_rate:.2%})")
+        print(f"Pushes: {pushes} ({push_rate:.2%})")
+        print(f"Losses: {losses} ({loss_rate:.2%})")
+        print("--------------------------")
+        return win_rate, push_rate, loss_rate
 
     def save_weights(self, path=None):
         """
