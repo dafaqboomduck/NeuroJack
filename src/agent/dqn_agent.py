@@ -7,23 +7,24 @@ import random
 
 from src.model.q_model import build_q_model
 from src.memory.replay_buffer import ReplayBuffer
-from src.config import settings
 
 class DQNAgent:
     def __init__(self,
                  state_size, # This will now be passed dynamically from env.state_size
                  num_actions, # This will now be passed dynamically from env.num_actions
-                 learning_rate=settings.LEARNING_RATE,
-                 gamma=settings.GAMMA,
-                 epsilon_start=settings.EPSILON_START,
-                 epsilon_end=settings.EPSILON_END,
-                 epsilon_decay=settings.EPSILON_DECAY,
-                 replay_buffer_capacity=settings.REPLAY_BUFFER_CAPACITY,
-                 target_update_freq=settings.TARGET_UPDATE_FREQ,
+                 num_decks=1,
+                 learning_rate=1e-4,
+                 gamma=0.99,
+                 epsilon_start=1.0,
+                 epsilon_end=0.01,
+                 epsilon_decay=0.995,
+                 replay_buffer_capacity=10000,
+                 target_update_freq=1000,
                  use_card_count=False): # New parameter to indicate if card counting is used
 
         self.state_size = state_size
         self.num_actions = num_actions
+        self.num_decks = num_decks
         self.gamma = gamma
         self.epsilon = epsilon_start
         self.epsilon_end = epsilon_end
@@ -70,7 +71,7 @@ class DQNAgent:
 
         if self.use_card_count:
             # Use settings.NUM_DECKS for consistency in normalization
-            max_running_count_abs = settings.NUM_DECKS * 20 # Max absolute count for NUM_DECKS (approx)
+            max_running_count_abs = self.num_decks * 20 # Max absolute count for NUM_DECKS (approx)
             state_vector.append(running_count / max_running_count_abs)
 
         return np.array(state_vector, dtype=np.float32)
@@ -124,8 +125,8 @@ class DQNAgent:
         states, actions, rewards, next_states, dones = self.replay_buffer.sample(batch_size)
         self._train_step(states, actions, rewards, next_states, dones)
 
-    def fit(self, env, num_episodes=settings.NUM_EPISODES, batch_size=settings.BATCH_SIZE,
-        log_interval=settings.TARGET_UPDATE_FREQ):
+    def fit(self, env, num_episodes, batch_size,
+        log_interval):
         """
         Trains the DQN agent in the given environment.
 
