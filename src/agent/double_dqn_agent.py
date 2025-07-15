@@ -5,7 +5,6 @@ import tensorflow as tf
 from tensorflow import keras
 
 from src.agent.dqn_agent import DQNAgent
-from src.config import settings
 
 class DoubleDQNAgent(DQNAgent):
     def __init__(self, *args, **kwargs):
