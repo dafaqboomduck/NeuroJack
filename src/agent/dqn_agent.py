@@ -10,8 +10,8 @@ from src.memory.replay_buffer import ReplayBuffer
 
 class DQNAgent:
     def __init__(self,
-                 state_size, # This will now be passed dynamically from env.state_size
-                 num_actions, # This will now be passed dynamically from env.num_actions
+                 state_size=3,
+                 num_actions=2,
                  num_decks=1,
                  learning_rate=1e-4,
                  gamma=0.99,
@@ -19,7 +19,7 @@ class DQNAgent:
                  epsilon_end=0.01,
                  epsilon_decay=0.995,
                  replay_buffer_capacity=10000,
-                 target_update_freq=1000,
+                 target_update_freq=100,
                  use_card_count=False): # New parameter to indicate if card counting is used
 
         self.state_size = state_size
