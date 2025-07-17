@@ -10,3 +10,7 @@ HI_LO_COUNT_VALUES = {
     '7': 0, '8': 0, '9': 0,
     '10': -1, 'J': -1, 'Q': -1, 'K': -1, 'A': -1
 }
+
+# Suits and Ranks for deck creation
+RANKS = list(CARD_VALUES.keys())
+SUITS = ['H', 'D', 'C', 'S'] # Hearts, Diamonds, Clubs, Spades
