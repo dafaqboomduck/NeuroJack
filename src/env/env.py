@@ -7,7 +7,6 @@ from typing import List, Tuple, Dict, Union, Any, Optional
 from src.env.playerhand import PlayerHand
 from src.env.deck import Deck
 from src.env.card import Card
-from src.env.values import CARD_VALUES # Only for reference, not directly used for card value in env.
 
 # Configure logging for the environment
 logger = logging.getLogger(__name__)
