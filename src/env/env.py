@@ -1,3 +1,5 @@
+# blackjack_rl/env.py
+
 import numpy as np
 import random
 import logging
@@ -10,7 +12,8 @@ from src.env.card import Card
 
 # Configure logging for the environment
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.WARNING) # Set to INFO for general messages, DEBUG for detailed tracing
+# Set to INFO for general messages, DEBUG for detailed tracing - changed to INFO for less verbosity by default
+logger.setLevel(logging.WARNING)
 
 # Define action constants for clarity
 ACTION_STAND = 0
@@ -131,7 +134,7 @@ class CustomBlackjackEnv:
 
         obs: Tuple[int, ...] = (player_sum, dealer_showing_value, int(usable_ace))
         if self.count_cards:
-            decks_remaining = max(1e-6, decks_remaining)
+            decks_remaining = max(1e-6, self.deck.cards_remaining() / 52.0)
             true_count = round(self.running_count / decks_remaining)
             obs += (self.running_count, true_count)
 
@@ -233,9 +236,10 @@ class CustomBlackjackEnv:
             player_sum, _ = self._update_hand_value(current_player_hand_obj.cards)
             if player_sum > 21:
                 current_player_hand_obj.reward = -1.0
-                if current_player_hand_obj.double_down: # Reward was already -1, now -2
+                if current_player_hand_obj.double_down:
                     current_player_hand_obj.reward *= 2
                 logger.info(f"Hand {self.current_hand_index + 1}: Player busts ({player_sum}). Reward: {current_player_hand_obj.reward}")
+                current_player_hand_obj.stood = True # <--- ADDED: Mark hand as stood when it busts
                 current_hand_resolved = True
             # Else, hand is not resolved yet, player can continue to hit/stand
         elif action == ACTION_STAND:
@@ -251,6 +255,7 @@ class CustomBlackjackEnv:
             if player_sum > 21:
                 current_player_hand_obj.reward = -1.0 * 2 # Double penalty for bust on double down
                 logger.info(f"Hand {self.current_hand_index + 1}: Player busts on double down ({player_sum}). Reward: {current_player_hand_obj.reward}")
+                # No need to add .stood = True here, as it's already set right above for double_down action
             current_hand_resolved = True
         elif action == ACTION_SPLIT and self.allow_splitting and is_first_action and \
              current_player_hand_cards[0].rank == current_player_hand_cards[1].rank:
@@ -385,16 +390,23 @@ class CustomBlackjackEnv:
         player_sum, _ = self._update_hand_value(player_hand_cards)
         dealer_sum, _ = self._update_hand_value(self.dealer_hand)
 
+        logger.info(f"Calculating reward for player hand with sum {player_sum} against dealer sum {dealer_sum}. Dealer total: {dealer_sum}") # Added log
+
         # Player bust is handled immediately in step, so this is for hands that didn't bust.
         if player_sum > 21: # Should ideally not happen if called correctly
+            logger.error("Error: _calculate_reward called for a busted hand that should have been resolved earlier.") # Added log
             return -1.0
         elif dealer_sum > 21:
+            logger.info("Dealer busted. Player wins.") # Added log
             return 1.0 # Player wins because dealer busted
         elif player_sum > dealer_sum:
+            logger.info("Player has higher sum. Player wins.") # Added log
             return 1.0
         elif player_sum < dealer_sum:
+            logger.info("Dealer has higher sum. Player loses.") # Added log
             return -1.0
         else:
+            logger.info("Player and Dealer have same sum. Push.") # Added log
             return 0.0 # Push
 
     def render(self) -> None:
@@ -426,7 +438,7 @@ class CustomBlackjackEnv:
         print(f"Dealer Hand: {dealer_cards_display} (Showing: {self.dealer_hand[0].value}, Total: {dealer_total_display})")
 
         if self.count_cards:
-            decks_remaining = max(0.1, self.deck.cards_remaining() / 52.0)
+            decks_remaining = max(1e-6, self.deck.cards_remaining() / 52.0)
             true_count = round(self.running_count / decks_remaining)
             print(f"Running Count: {self.running_count}, True Count: {true_count} (Decks Left: {decks_remaining:.1f})")
         print("----------------------")
