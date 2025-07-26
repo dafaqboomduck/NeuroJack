@@ -10,7 +10,7 @@ from src.env.card import Card
 
 # Configure logging for the environment
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO) # Set to INFO for general messages, DEBUG for detailed tracing
+logger.setLevel(logging.WARNING) # Set to INFO for general messages, DEBUG for detailed tracing
 
 # Define action constants for clarity
 ACTION_STAND = 0
@@ -40,14 +40,14 @@ class CustomBlackjackEnv:
 
     def __init__(self, render_mode: Optional[str] = None, num_decks: int = 6, blackjack_payout: float = 1.5,
                  allow_doubling: bool = True, allow_splitting: bool = True, count_cards: bool = True,
-                 seed: Optional[int] = None, dealer_hits_on_soft_17: bool = True,
+                 dealer_hits_on_soft_17: bool = True,
                  reshuffle_threshold_pct: float = 0.25):
         self.num_decks = num_decks
         self.blackjack_payout = blackjack_payout
         self.allow_doubling = allow_doubling
         self.allow_splitting = allow_splitting
         self.count_cards = count_cards
-        self.seed = seed
+        # Removed self.seed as it's no longer used for reproducibility
         self.render_mode = render_mode
         self.dealer_hits_on_soft_17 = dealer_hits_on_soft_17
         self.reshuffle_threshold_pct = reshuffle_threshold_pct
@@ -63,7 +63,8 @@ class CustomBlackjackEnv:
             actions.append("3: Split")
         self.action_description = ", ".join(actions)
 
-        self.deck: Deck = Deck(self.num_decks, seed=self.seed, reshuffle_threshold_pct=self.reshuffle_threshold_pct)
+        # Initialize Deck without a seed, so it uses system randomness
+        self.deck: Deck = Deck(self.num_decks, seed=None, reshuffle_threshold_pct=self.reshuffle_threshold_pct)
         self.player_hands: List[PlayerHand] = []
         self.dealer_hand: List[Card] = []
         self.current_hand_index: int = 0
@@ -154,9 +155,9 @@ class CustomBlackjackEnv:
         return obs
 
     def reset(self, seed: Optional[int] = None, options: Optional[Dict[str, Any]] = None) -> Tuple[Tuple[int, ...], Dict[str, bool]]:
-        if seed is not None:
-            self.seed = seed
-        self.deck = Deck(self.num_decks, seed=self.seed, reshuffle_threshold_pct=self.reshuffle_threshold_pct)
+        # Removed seed parameter and logic from reset, as the environment will now be truly random
+        # Re-initialize Deck without a seed for each reset
+        self.deck = Deck(self.num_decks, seed=None, reshuffle_threshold_pct=self.reshuffle_threshold_pct)
 
         self.player_hands = [PlayerHand()]
         self.dealer_hand = []
