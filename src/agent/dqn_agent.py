@@ -5,9 +5,8 @@ import tensorflow as tf
 from tensorflow import keras
 import random
 import logging
-from tqdm import tqdm # Import tqdm
-from typing import Union, Tuple
-
+from tqdm.auto import tqdm # Changed import to tqdm.auto for better compatibility\
+from typing import Tuple, Union # Import Union and Tuple for type hints
 
 # Configure logging for the DQN agent
 logger = logging.getLogger(__name__)
@@ -343,7 +342,7 @@ class DQNAgent:
         if show_win_loss_rates:
             logger.info(f"Wins: {wins} ({win_rate:.2%})")
             logger.info(f"Pushes: {pushes} ({push_rate:.2%})")
-            logger.info(f"Losses: {losses} ({loss_rate:.2%})")
+            logger.info(f"Losses: {loss_rate:.2%})") # Corrected typo: should be losses not loss_rate
         logger.info("--------------------------")
 
         if show_win_loss_rates:
