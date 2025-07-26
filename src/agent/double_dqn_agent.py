@@ -4,6 +4,8 @@ import numpy as np
 import tensorflow as tf
 from tensorflow import keras
 import logging # Import logging
+from typing import Tuple, Union # Import Union and Tuple for type hints
+import tqdm
 
 from src.agent.dqn_agent import DQNAgent
 
@@ -60,6 +62,92 @@ class DoubleDQNAgent(DQNAgent):
         grads = tape.gradient(loss, self.q_net.trainable_variables)
         self.optimizer.apply_gradients(zip(grads, self.q_net.trainable_variables))
         return loss
+
+    def evaluate(self, environment, num_eval_episodes: int, show_win_loss_rates: bool = False) -> Union[float, Tuple[float, float, float, float]]:
+        """
+        Evaluates the agent's performance in the given environment.
+        The primary metric is average reward. Optionally shows win/loss/push rates.
+
+        Args:
+            environment: The Blackjack environment to evaluate on.
+            num_eval_episodes (int): The number of episodes to run for evaluation.
+            show_win_loss_rates (bool): If True, also returns and logs win/loss/push rates.
+
+        Returns:
+            Union[float, Tuple[float, float, float, float]]:
+                If show_win_loss_rates is False, returns the average reward.
+                If show_win_loss_rates is True, returns (average_reward, win_rate, push_rate, loss_rate).
+        """
+        logger.info(f"Starting evaluation for {num_eval_episodes} episodes...")
+        total_rewards = []
+        wins = 0
+        pushes = 0
+        losses = 0
+
+        original_epsilon = self.epsilon
+        self.epsilon = 0.0 # Agent acts greedily during evaluation
+
+        with tqdm(range(num_eval_episodes), desc=f"{self.model_name} Evaluation", unit="episode",
+                  leave=True, dynamic_ncols=True, disable=not self.verbose) as pbar_eval:
+            for episode in pbar_eval:
+                raw_state, info = environment.reset()
+                state = self._preprocess_state(raw_state)
+                done = False
+                episode_reward = 0
+
+                while not done:
+                    available_actions = [True, True]
+                    if environment.allow_doubling:
+                        available_actions.append(info.get('can_double', False))
+                    if environment.allow_splitting:
+                        available_actions.append(info.get('can_split', False))
+                    while len(available_actions) < self.num_actions:
+                        available_actions.append(False)
+
+                    action = self.choose_action(state, available_actions)
+                    next_state_raw, reward, done, info = environment.step(action)
+                    state = self._preprocess_state(next_state_raw)
+                    episode_reward += reward # Accumulate reward for the episode
+
+                total_rewards.append(episode_reward)
+
+                if episode_reward > 0:
+                    wins += 1
+                elif episode_reward < 0:
+                    losses += 1
+                else:
+                    pushes += 1
+
+                # Update evaluation progress bar description
+                postfix_dict = {'AvgR': f"{np.mean(total_rewards):.2f}"}
+                if show_win_loss_rates:
+                    postfix_dict['Wins'] = f"{wins}"
+                    postfix_dict['Pushes'] = f"{pushes}"
+                    postfix_dict['Losses'] = f"{losses}"
+                pbar_eval.set_postfix(postfix_dict)
+
+        self.epsilon = original_epsilon # Restore original epsilon
+
+        total_episodes = len(total_rewards)
+        average_reward = np.mean(total_rewards) if total_episodes > 0 else 0.0
+        win_rate = wins / total_episodes if total_episodes > 0 else 0
+        push_rate = pushes / total_episodes if total_episodes > 0 else 0
+        loss_rate = losses / total_episodes if total_episodes > 0 else 0
+
+
+        logger.info("\n--- Evaluation Results ---")
+        logger.info(f"Total Episodes: {total_episodes}")
+        logger.info(f"Average Reward: {average_reward:.4f}")
+        if show_win_loss_rates:
+            logger.info(f"Wins: {wins} ({win_rate:.2%})")
+            logger.info(f"Pushes: {pushes} ({push_rate:.2%})")
+            logger.info(f"Losses: {losses} ({loss_rate:.2%})")
+        logger.info("--------------------------")
+
+        if show_win_loss_rates:
+            return average_reward, win_rate, push_rate, loss_rate
+        else:
+            return average_reward
 
     def save_weights(self, path=None):
         """
