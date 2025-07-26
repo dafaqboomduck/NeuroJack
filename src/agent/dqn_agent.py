@@ -5,6 +5,7 @@ import tensorflow as tf
 from tensorflow import keras
 import random
 import logging
+from tqdm import tqdm # Import tqdm
 
 # Configure logging for the DQN agent
 logger = logging.getLogger(__name__)
@@ -24,6 +25,7 @@ class DQNAgent:
                  epsilon_decay=0.995,
                  replay_buffer_capacity=10000,
                  target_update_freq=100,
+                 train_freq=1, # <--- ADDED: New parameter for training frequency
                  verbose=1,
                  model_name="DQN"):
 
@@ -38,7 +40,8 @@ class DQNAgent:
         self.epsilon_end = epsilon_end
         self.epsilon_decay = epsilon_decay
         self.target_update_freq = target_update_freq
-        self.replay_buffer_capacity = replay_buffer_capacity # Store this for potential future use if needed
+        self.replay_buffer_capacity = replay_buffer_capacity
+        self.train_freq = train_freq # <--- STORED: Store the new parameter
         self.verbose = bool(verbose)
         self.model_name = model_name
 
@@ -55,7 +58,7 @@ class DQNAgent:
         self.loss_fn = keras.losses.MeanSquaredError()
 
         # Replay Buffer
-        self.replay_buffer = ReplayBuffer(capacity=self.replay_buffer_capacity) # Use the stored capacity
+        self.replay_buffer = ReplayBuffer(capacity=self.replay_buffer_capacity)
 
     def _preprocess_state(self, state: tuple) -> np.ndarray:
         """
@@ -149,7 +152,7 @@ class DQNAgent:
 
         with tf.GradientTape() as tape:
             q_values = self.q_net(states)
-            action_indices = tf.stack([tf.range(tf.shape(actions)[0], dtype=tf.int32), actions], axis=1) # Use tf.shape(actions)[0] for length in tf.function
+            action_indices = tf.stack([tf.range(tf.shape(actions)[0], dtype=tf.int32), actions], axis=1)
             predicted_q_values = tf.gather_nd(q_values, action_indices)
 
             loss = self.loss_fn(targets, predicted_q_values)
@@ -168,7 +171,6 @@ class DQNAgent:
     def learn(self, batch_size: int):
         if len(self.replay_buffer) < batch_size:
             return
-
         states, actions, rewards, next_states, dones = self.replay_buffer.sample(batch_size)
         self._train_step(states, actions, rewards, next_states, dones)
 
@@ -178,49 +180,88 @@ class DQNAgent:
         """
         rewards_history = []
         target_update_counter = 0
+        steps_in_interval = 0
+        current_interval_rewards = []
+        batch_num = 0
+        global_step_counter = 0 # <--- ADDED: Counter for total steps to control learn frequency
 
-        logger.info(f"Starting {self.model_name} training for {num_episodes} episodes...") # Use self.model_name
-        
-        for episode in range(num_episodes):
-            obs, info = env.reset()
-            state = self._preprocess_state(obs)
-            done = False
-            total_reward = 0
+        logger.info(f"Starting {self.model_name} training for {num_episodes} episodes...")
 
-            while not done:
-                available_actions = [True, True] # Stand (0) and Hit (1) are generally always available
+        pbar_batch = tqdm(total=log_interval, desc=f"Batch {batch_num + 1}/{num_episodes // log_interval}",
+                          unit=" episode", leave=True, dynamic_ncols=True, disable=not self.verbose)
 
-                if env.allow_doubling:
-                    available_actions.append(info.get('can_double', False))
-                if env.allow_splitting:
-                    available_actions.append(info.get('can_split', False))
+        try:
+            for episode in range(num_episodes):
+                obs, info = env.reset()
+                state = self._preprocess_state(obs)
+                done = False
+                total_reward = 0
 
-                while len(available_actions) < self.num_actions:
-                    available_actions.append(False)
+                while not done:
+                    available_actions = [True, True]
 
-                action = self.choose_action(state, available_actions)
+                    if env.allow_doubling:
+                        available_actions.append(info.get('can_double', False))
+                    if env.allow_splitting:
+                        available_actions.append(info.get('can_split', False))
 
-                next_obs, reward, done, info = env.step(action)
-                next_state = self._preprocess_state(next_obs)
+                    while len(available_actions) < self.num_actions:
+                        available_actions.append(False)
 
-                self.remember(state, action, reward, next_state, done)
-                self.learn(batch_size)
+                    action = self.choose_action(state, available_actions)
 
-                state = next_state
-                total_reward += reward
+                    next_obs, reward, done, info = env.step(action)
+                    next_state = self._preprocess_state(next_obs)
 
-            self.epsilon = max(self.epsilon_end, self.epsilon * self.epsilon_decay)
+                    self.remember(state, action, reward, next_state, done)
 
-            target_update_counter += 1
-            if target_update_counter >= self.target_update_freq:
-                self.update_target_model()
-                target_update_counter = 0
+                    global_step_counter += 1 # <--- INCREMENT GLOBAL STEP COUNTER
+                    if global_step_counter % self.train_freq == 0: # <--- CONDITION TO CALL LEARN
+                        self.learn(batch_size)
 
-            rewards_history.append(total_reward)
+                    state = next_state
+                    total_reward += reward
+                    steps_in_interval += 1
 
-            if (episode + 1) % log_interval == 0:
-                avg_reward = np.mean(rewards_history[-log_interval:])
-                logger.info(f"Episode {episode + 1}/{num_episodes}, Avg Reward (last {log_interval}): {avg_reward:.4f}, Epsilon: {self.epsilon:.3f}, Replay Buffer Size: {len(self.replay_buffer)}")
+                self.epsilon = max(self.epsilon_end, self.epsilon * self.epsilon_decay)
+
+                target_update_counter += 1
+                if target_update_counter >= self.target_update_freq:
+                    self.update_target_model()
+                    target_update_counter = 0
+
+                rewards_history.append(total_reward)
+                current_interval_rewards.append(total_reward)
+
+                pbar_batch.update(1)
+                pbar_batch.set_postfix({
+                    'AvgR': f"{np.mean(current_interval_rewards):.2f}" if current_interval_rewards else 'N/A',
+                    'Eps': f"{self.epsilon:.3f}",
+                    'Buf': f"{len(self.replay_buffer)}",
+                    'Steps/Int': f"{steps_in_interval}"
+                })
+
+                if (episode + 1) % log_interval == 0:
+                    batch_num += 1
+                    avg_reward_interval = np.mean(current_interval_rewards)
+
+                    logger.info(
+                        f"\nEpisode {episode + 1}/{num_episodes}, "
+                        f"Avg Reward (last {log_interval}): {avg_reward_interval:.4f}, "
+                        f"Epsilon: {self.epsilon:.3f}, "
+                        f"\nReplay Buffer Size: {len(self.replay_buffer)}, "
+                        f"Total Steps in Interval: {steps_in_interval}"
+                    )
+                    steps_in_interval = 0
+                    current_interval_rewards = []
+
+                    if (episode + 1) < num_episodes:
+                        pbar_batch.reset(total=log_interval)
+                        pbar_batch.set_description(f"Batch {batch_num + 1}/{num_episodes // log_interval}")
+                        pbar_batch.refresh()
+
+        finally:
+            pbar_batch.close()
 
         logger.info(f"{self.model_name} training complete.")
         return rewards_history
@@ -237,33 +278,39 @@ class DQNAgent:
         original_epsilon = self.epsilon
         self.epsilon = 0.0 # Agent acts greedily during evaluation
 
-        for episode in range(num_eval_episodes):
-            raw_state, info = environment.reset()
-            state = self._preprocess_state(raw_state)
-            done = False
+        with tqdm(range(num_eval_episodes), desc=f"{self.model_name} Evaluation", unit="episode",
+                  leave=True, dynamic_ncols=True, disable=not self.verbose) as pbar_eval:
+            for episode in pbar_eval:
+                raw_state, info = environment.reset()
+                state = self._preprocess_state(raw_state)
+                done = False
 
-            while not done:
-                available_actions = [True, True]
-                if environment.allow_doubling:
-                    available_actions.append(info.get('can_double', False))
-                if environment.allow_splitting:
-                    available_actions.append(info.get('can_split', False))
-                while len(available_actions) < self.num_actions:
-                    available_actions.append(False)
+                while not done:
+                    available_actions = [True, True]
+                    if environment.allow_doubling:
+                        available_actions.append(info.get('can_double', False))
+                    if environment.allow_splitting:
+                        available_actions.append(info.get('can_split', False))
+                    while len(available_actions) < self.num_actions:
+                        available_actions.append(False)
 
-                action = self.choose_action(state, available_actions)
-                next_state_raw, reward, done, info = environment.step(action)
-                state = self._preprocess_state(next_state_raw)
+                    action = self.choose_action(state, available_actions)
+                    next_state_raw, reward, done, info = environment.step(action)
+                    state = self._preprocess_state(next_state_raw)
 
-            if reward > 0:
-                wins += 1
-            elif reward < 0:
-                losses += 1
-            else:
-                pushes += 1
+                if reward > 0:
+                    wins += 1
+                elif reward < 0:
+                    losses += 1
+                else:
+                    pushes += 1
 
-            if (episode + 1) % 1000 == 0:
-                logger.info(f"  Evaluation episode {episode + 1}/{num_eval_episodes}")
+                # Update evaluation progress bar description
+                pbar_eval.set_postfix({
+                    'Wins': f"{wins}",
+                    'Pushes': f"{pushes}",
+                    'Losses': f"{losses}"
+                })
 
         self.epsilon = original_epsilon
 
@@ -289,7 +336,7 @@ class DQNAgent:
             logger.error("Error: A path must be provided to save weights.")
             return
         self.q_net.save_weights(path)
-        logger.info(f"DQN model weights saved to {path}")
+        logger.info(f"{self.model_name} model weights saved to {path}")
 
     def load_weights(self, path: str = None):
         """
@@ -301,6 +348,6 @@ class DQNAgent:
         try:
             self.q_net.load_weights(path)
             self.target_q_net.set_weights(self.q_net.get_weights())
-            logger.info(f"DQN model weights loaded from {path}")
+            logger.info(f"{self.model_name} model weights loaded from {path}")
         except Exception as e:
-            logger.error(f"Error loading DQN model weights from {path}: {e}")
+            logger.error(f"Error loading {self.model_name} model weights from {path}: {e}")
