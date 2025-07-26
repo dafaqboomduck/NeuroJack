@@ -90,7 +90,7 @@ class CustomBlackjackEnv:
             hand_sum += card.value
 
         usable_ace = False
-        if num_aces > 0 and hand_sum <= 21:
+        if num_aces > 0 and hand_sum + 10 <= 21:
             usable_ace = True
 
         while hand_sum > 21 and num_aces > 0:
@@ -119,7 +119,10 @@ class CustomBlackjackEnv:
 
     def _get_obs(self) -> Union[Tuple[int, int, int], Tuple[int, int, int, int, int]]:
         if not (0 <= self.current_hand_index < len(self.player_hands)):
-            logger.debug("Getting observation for a resolved state.")
+            # Return the last known valid observation and include a done flag
+            if hasattr(self, "_last_valid_obs"):
+                return self._last_valid_obs
+            # Fallback if no last observation is stored
             return (0, 0, 0, 0, 0) if self.count_cards else (0, 0, 0)
 
         current_player_hand_cards = self.player_hands[self.current_hand_index].cards
@@ -128,11 +131,13 @@ class CustomBlackjackEnv:
 
         obs: Tuple[int, ...] = (player_sum, dealer_showing_value, int(usable_ace))
         if self.count_cards:
-            decks_remaining = max(0.1, self.deck.cards_remaining() / 52.0)  # Avoid division by zero
+            decks_remaining = max(1e-6, decks_remaining)
             true_count = round(self.running_count / decks_remaining)
             obs += (self.running_count, true_count)
-        return obs
 
+        # Store the latest valid observation
+        self._last_valid_obs = obs
+        return obs
 
     def reset(self, seed: Optional[int] = None, options: Optional[Dict[str, Any]] = None) -> Tuple[Tuple[int, ...], Dict[str, bool]]:
         if seed is not None:
@@ -282,7 +287,7 @@ class CustomBlackjackEnv:
         else:
             # Invalid action
             logger.warning(f"Hand {self.current_hand_index + 1}: Invalid action {action} performed. Penalizing.")
-            current_player_hand_obj.reward = -0.75 # Penalty for illegal move
+            current_player_hand_obj.reward = -1 # Penalty for illegal move
             current_player_hand_obj.stood = True # Forcing hand to stand after invalid move
             current_hand_resolved = True
 
