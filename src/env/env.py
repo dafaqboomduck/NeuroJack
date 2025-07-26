@@ -1,5 +1,3 @@
-# blackjack_rl/env.py
-
 import numpy as np
 import random
 import logging
@@ -12,8 +10,7 @@ from src.env.card import Card
 
 # Configure logging for the environment
 logger = logging.getLogger(__name__)
-# Set to INFO for general messages, DEBUG for detailed tracing - changed to INFO for less verbosity by default
-logger.setLevel(logging.WARNING)
+logger.setLevel(logging.INFO) # Set to INFO for general messages, DEBUG for detailed tracing
 
 # Define action constants for clarity
 ACTION_STAND = 0
@@ -28,10 +25,10 @@ class CustomBlackjackEnv:
 
     Observation Space:
     Tuple: (player_current_sum, dealer_card_showing, usable_ace[, running_count, true_count])
-    - player_current_sum: Sum of player's current hand (int, 2–22).
-    - dealer_card_showing: Value of dealer's visible card (int, 1–11, Ace=11).
-    - usable_ace: Whether player has a usable ace (int, 0 or 1).
-    - running_count: Current Hi-Lo running count (if count_cards=True)
+    - player_current_sum: Sum of player's current hand (int, 2–22).\n
+    - dealer_card_showing: Value of dealer's visible card (int, 1–11, Ace=11).\n
+    - usable_ace: Whether player has a usable ace (int, 0 or 1).\n
+    - running_count: Current Hi-Lo running count (if count_cards=True)\n
     - true_count: Current Hi-Lo true count (running_count / decks_remaining) (if count_cards=True)
 
     Action Space:
@@ -85,23 +82,29 @@ class CustomBlackjackEnv:
         return 2 + int(self.allow_doubling) + int(self.allow_splitting)
 
     def _update_hand_value(self, hand_cards: List[Card]) -> Tuple[int, bool]:
-        hand_sum = 0
-        num_aces = 0
+        hand_sum_soft = 0 # Sum with all Aces as 11 initially
+        num_aces_in_hand = 0
         for card in hand_cards:
             if card.rank == 'A':
-                num_aces += 1
-            hand_sum += card.value
+                num_aces_in_hand += 1
+                hand_sum_soft += 11
+            else:
+                hand_sum_soft += card.value
 
-        usable_ace = False
-        if num_aces > 0 and hand_sum + 10 <= 21:
-            usable_ace = True
+        # Adjust aces from 11 to 1 if busting
+        current_sum = hand_sum_soft
+        aces_remaining_as_11 = num_aces_in_hand
 
-        while hand_sum > 21 and num_aces > 0:
-            hand_sum -= 10
-            num_aces -= 1
-            usable_ace = False # No longer a 'usable' ace if it had to be counted as 1
+        while current_sum > 21 and aces_remaining_as_11 > 0:
+            current_sum -= 10 # Convert an Ace from 11 to 1
+            aces_remaining_as_11 -= 1 # One less ace contributing 11
 
-        return hand_sum, usable_ace
+        # A usable ace exists if there was at least one ace originally,
+        # and after adjustments, at least one ace is still counted as 11.
+        # This is equivalent to: current_sum <= 21 AND aces_remaining_as_11 > 0
+        usable_ace = (current_sum <= 21 and aces_remaining_as_11 > 0)
+
+        return current_sum, usable_ace
 
     def _deal_card(self, hand_obj_or_list: Union[PlayerHand, List[Card]], face_up: bool = True, is_initial_deal: bool = False) -> Card:
         card = self.deck.deal_card()
@@ -121,12 +124,22 @@ class CustomBlackjackEnv:
         return card
 
     def _get_obs(self) -> Union[Tuple[int, int, int], Tuple[int, int, int, int, int]]:
+        # This method should always be called with a valid current_hand_index
+        # or when the game is fully resolved and we need a final observation.
         if not (0 <= self.current_hand_index < len(self.player_hands)):
-            # Return the last known valid observation and include a done flag
-            if hasattr(self, "_last_valid_obs"):
-                return self._last_valid_obs
-            # Fallback if no last observation is stored
-            return (0, 0, 0, 0, 0) if self.count_cards else (0, 0, 0)
+            # If all player hands are resolved, this is a valid state for _get_obs to be called
+            # to get the final observation. No warning is needed here.
+            player_sum_for_obs = self._update_hand_value(self.player_hands[0].cards)[0] if self.player_hands else 0
+            dealer_showing_value = self.dealer_hand[0].value
+            usable_ace_for_obs = self._update_hand_value(self.player_hands[0].cards)[1] if self.player_hands else 0
+
+            obs: Tuple[int, ...] = (player_sum_for_obs, dealer_showing_value, int(usable_ace_for_obs))
+            if self.count_cards:
+                decks_remaining = max(1e-6, self.deck.cards_remaining() / 52.0)
+                true_count = round(self.running_count / decks_remaining)
+                obs += (self.running_count, true_count)
+            return obs
+
 
         current_player_hand_cards = self.player_hands[self.current_hand_index].cards
         player_sum, usable_ace = self._update_hand_value(current_player_hand_cards)
@@ -138,8 +151,6 @@ class CustomBlackjackEnv:
             true_count = round(self.running_count / decks_remaining)
             obs += (self.running_count, true_count)
 
-        # Store the latest valid observation
-        self._last_valid_obs = obs
         return obs
 
     def reset(self, seed: Optional[int] = None, options: Optional[Dict[str, Any]] = None) -> Tuple[Tuple[int, ...], Dict[str, bool]]:
@@ -201,9 +212,10 @@ class CustomBlackjackEnv:
 
         if done:
             self.player_hands[0].reward = reward
-            logger.debug(f"Reset: Game ended on initial deal. Player hand 0 reward: {reward}")
+            # FIX: Set player hand to stood if game ends on initial deal (blackjack, push, or dealer blackjack)
+            self.player_hands[0].stood = True 
 
-        observation = self._get_obs()
+        observation = self._get_obs() # Get the initial observation based on the current state
         if self.render_mode == 'human':
             self.render()
         logger.info(f"Environment reset. Observation: {observation}, Info: {info}, Done: {done}")
@@ -216,14 +228,12 @@ class CustomBlackjackEnv:
 
         if not (0 <= self.current_hand_index < len(self.player_hands)):
             logger.error("Step called when no active player hands remain. This should not happen.")
+            # If this state is reached, the game should already be done, so return final obs.
             return self._get_obs(), 0.0, True, info
 
         current_player_hand_obj = self.player_hands[self.current_hand_index]
         current_player_hand_cards = current_player_hand_obj.cards
-        player_sum, usable_ace = self._update_hand_value(current_player_hand_cards)
-
-        # Check if it's the first action for the current hand (before any hits/doubles)
-        # and not already stood/doubled down.
+        
         is_first_action = (len(current_player_hand_cards) == 2 and
                            not current_player_hand_obj.stood and
                            not current_player_hand_obj.double_down)
@@ -239,11 +249,11 @@ class CustomBlackjackEnv:
                 if current_player_hand_obj.double_down:
                     current_player_hand_obj.reward *= 2
                 logger.info(f"Hand {self.current_hand_index + 1}: Player busts ({player_sum}). Reward: {current_player_hand_obj.reward}")
-                current_player_hand_obj.stood = True # <--- ADDED: Mark hand as stood when it busts
+                current_player_hand_obj.stood = True # Mark hand as stood when it busts
                 current_hand_resolved = True
             # Else, hand is not resolved yet, player can continue to hit/stand
         elif action == ACTION_STAND:
-            logger.debug(f"Hand {self.current_hand_index + 1}: Player stands ({player_sum}).")
+            logger.debug(f"Hand {self.current_hand_index + 1}: Player stands ({self._update_hand_value(current_player_hand_obj.cards)[0]}).")
             current_player_hand_obj.stood = True
             current_hand_resolved = True
         elif action == ACTION_DOUBLE_DOWN and self.allow_doubling and is_first_action:
@@ -255,7 +265,6 @@ class CustomBlackjackEnv:
             if player_sum > 21:
                 current_player_hand_obj.reward = -1.0 * 2 # Double penalty for bust on double down
                 logger.info(f"Hand {self.current_hand_index + 1}: Player busts on double down ({player_sum}). Reward: {current_player_hand_obj.reward}")
-                # No need to add .stood = True here, as it's already set right above for double_down action
             current_hand_resolved = True
         elif action == ACTION_SPLIT and self.allow_splitting and is_first_action and \
              current_player_hand_cards[0].rank == current_player_hand_cards[1].rank:
@@ -283,12 +292,15 @@ class CustomBlackjackEnv:
             # If Aces were split, automatically stand these hands
             if current_player_hand_obj.is_split_ace:
                 current_player_hand_obj.stood = True
-                # The game will advance to the next hand (the newly split one)
-                # If both are aces, the new_hand will also be stood automatically when its turn comes.
                 if new_hand.is_split_ace:
-                    new_hand.stood = True
-                current_hand_resolved = True # Mark current hand as resolved (stood)
-            # If not aces, hand is not resolved yet, player can continue to hit/stand on *this* hand
+                    new_hand.stood = True # Ensure the newly created split ace hand is also stood
+
+            # After split, the current hand (first split hand) is still active for actions
+            # unless it was an Ace split.
+            if not current_player_hand_obj.stood: # Only if not auto-stood (i.e., not split aces)
+                current_hand_resolved = False # Player can still hit/stand on this hand
+            else: # If it was an Ace split, it's auto-stood
+                current_hand_resolved = True
         else:
             # Invalid action
             logger.warning(f"Hand {self.current_hand_index + 1}: Invalid action {action} performed. Penalizing.")
@@ -296,40 +308,39 @@ class CustomBlackjackEnv:
             current_player_hand_obj.stood = True # Forcing hand to stand after invalid move
             current_hand_resolved = True
 
-        if current_hand_resolved and current_player_hand_obj.reward == 0.0:
-            # If a hand is resolved due to standing or double down (not bust),
-            # check if it's an Ace split that now has 21 (blackjack, but usually not paid out as such after split)
-            # For simplicity, we treat it as a regular 21 for now.
-            pass # Reward will be calculated at game end based on dealer's hand
-
-        # Advance to the next hand if the current one is resolved
-        # Or, if the current hand is an Ace split and has received its only card.
+        # Now, advance to the next hand if the current one is resolved, or resolve the game.
         if current_hand_resolved:
             done = self._advance_to_next_hand_or_resolve_game()
-        # If not resolved (e.g., hit but not busted, or split non-aces), stay on current hand.
+        else:
+            done = False # Game is not done yet if hand is not resolved
 
-        # Determine the next_observation based on self.count_cards
+        # Determine the observation *after* all state changes, including advancing to the next hand.
         next_observation = self._get_obs()
 
-        # Update info for next observation
+        # Update info for next observation (if game is not done)
         if not done and self.current_hand_index < len(self.player_hands):
             next_hand = self.player_hands[self.current_hand_index]
             next_hand_cards = next_hand.cards
+            # Recalculate player_next_sum and usable_ace for the *next* active hand
+            # (already done by _get_obs, but info requires this logic)
+            # This logic is redundant with _get_obs, but kept for clarity of info dict.
             player_next_sum, _ = self._update_hand_value(next_hand_cards)
 
-            # Can double down if: allowed, it's the first action on this hand, and not already stood/doubled
             info["can_double"] = (self.allow_doubling and
                                   len(next_hand_cards) == 2 and
                                   not next_hand.stood and
                                   not next_hand.double_down and
-                                  not next_hand.is_split_ace) # Cannot double on split aces
+                                  not next_hand.is_split_ace)
 
-            # Can split if: allowed, first action, two cards of same rank
             info["can_split"] = (self.allow_splitting and
                                  len(next_hand_cards) == 2 and
                                  next_hand_cards[0].rank == next_hand_cards[1].rank and
                                  not next_hand.stood and
                                  not next_hand.double_down)
+        else:
+            # If done, no actions are possible
+            info = {"can_double": False, "can_split": False}
+
 
         final_reward = sum(hand.reward for hand in self.player_hands) if done else 0.0
 
