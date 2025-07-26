@@ -21,14 +21,14 @@ def basic_env():
     """Returns a basic environment with default rules, no card counting, no doubling/splitting."""
     return CustomBlackjackEnv(num_decks=1, blackjack_payout=1.5,
                               allow_doubling=False, allow_splitting=False,
-                              count_cards=False, seed=42)
+                              count_cards=False)
 
 @pytest.fixture
 def advanced_env():
     """Returns an environment with doubling, splitting, and card counting enabled."""
     return CustomBlackjackEnv(num_decks=6, blackjack_payout=1.5,
                               allow_doubling=True, allow_splitting=True,
-                              count_cards=True, seed=123) # Seed 123 for reproducibility
+                              count_cards=True)
 
 @pytest.fixture
 def mock_deck():
@@ -65,11 +65,9 @@ def test_env_initialization_basic(basic_env):
     assert not basic_env.allow_doubling
     assert not basic_env.allow_splitting
     assert not basic_env.count_cards
-    assert basic_env.seed == 42
     assert basic_env.state_size == 3
     assert basic_env.num_actions == 2 # Stand, Hit
     assert isinstance(basic_env.deck, Deck)
-    assert basic_env.deck.seed == 42 # Ensure deck gets the seed
     assert len(basic_env.player_hands) == 1
     assert len(basic_env.dealer_hand) == 2 # Dealer gets 2 cards initially
 
@@ -81,8 +79,7 @@ def test_env_initialization_advanced(advanced_env):
     assert advanced_env.count_cards
     assert advanced_env.state_size == 5
     assert advanced_env.num_actions == 4 # Stand, Hit, Double Down, Split
-    assert advanced_env.deck.seed == 123
-    
+
     # Re-initialize advanced_env with a mock deck to control initial cards
     # This is a better way to test the initial running_count
     with patch('src.env.env.Deck') as MockDeckClass:
@@ -101,7 +98,7 @@ def test_env_initialization_advanced(advanced_env):
         
         mock_env = CustomBlackjackEnv(num_decks=6, blackjack_payout=1.5,
                                       allow_doubling=True, allow_splitting=True,
-                                      count_cards=True, seed=123)
+                                      count_cards=True)
         # Expected running count: 0 (7H) + 0 (8S) + 0 (9D) = 0
         assert mock_env.running_count == 0
 
@@ -117,7 +114,7 @@ def test_env_initialization_advanced(advanced_env):
         
         mock_env_2 = CustomBlackjackEnv(num_decks=6, blackjack_payout=1.5,
                                         allow_doubling=True, allow_splitting=True,
-                                        count_cards=True, seed=123)
+                                        count_cards=True)
         # Expected running count: 1 (2H) + 1 (3S) + 1 (4D) = 3
         assert mock_env_2.running_count == 3
 
@@ -166,7 +163,7 @@ def test_get_obs_no_card_counting(MockDeck): # Removed basic_env fixture, will c
     # Set cards_remaining for the mock deck
     mock_deck_instance.cards_remaining.return_value = (1 * 52) - 4
     
-    env = CustomBlackjackEnv(num_decks=1, count_cards=False, seed=1) # Create env with mock
+    env = CustomBlackjackEnv(num_decks=1, count_cards=False) # Create env with mock
     # After reset, player has 10+7=17, dealer showing 5
     obs = env._get_obs()
     assert obs == (17, 5, 0) # player_sum, dealer_showing, usable_ace
@@ -182,7 +179,7 @@ def test_get_obs_with_card_counting(MockDeck): # Removed advanced_env fixture, w
         card('3', 'D'),  # Player 2 (+1)
         card('J', 'C')   # Dealer Hole (-1, revealed later)
     ]
-    env = CustomBlackjackEnv(num_decks=1, count_cards=True, seed=1) # Use 1 deck for simpler true count
+    env = CustomBlackjackEnv(num_decks=1, count_cards=True) # Use 1 deck for simpler true count
     # After reset, initial count: Player 2 (+1) + Player 3 (+1) + Dealer 10 (-1) = +1
     # Player has 2+3=5, dealer showing 10
     obs = env._get_obs()
@@ -202,10 +199,10 @@ def test_reset_initial_deal(MockDeck): # Removed basic_env fixture, will create 
     ]
     mock_deck_instance.cards_remaining.return_value = (1 * 52) - 8
     # Re-initialize env to use the mock
-    env = CustomBlackjackEnv(num_decks=1, allow_doubling=False, allow_splitting=False, count_cards=False, seed=1)
+    env = CustomBlackjackEnv(num_decks=1, allow_doubling=False, allow_splitting=False, count_cards=False)
 
     # Explicitly call reset to test its behavior
-    env.reset(seed=1)
+    env.reset()
 
     assert len(env.player_hands) == 1
     assert len(env.player_hands[0].cards) == 2
@@ -228,7 +225,7 @@ def test_reset_player_blackjack(MockDeck):
     ]
     mock_deck_instance.cards_remaining.return_value = (1 * 52) - 4
     # Instantiate env, which calls reset internally
-    env = CustomBlackjackEnv(num_decks=1, count_cards=False, seed=1)
+    env = CustomBlackjackEnv(num_decks=1, count_cards=False)
     
     assert env.player_hands[0].reward == 1.5 # Blackjack payout
     assert env.player_hands[0].stood # Hand should be stood if game is done
@@ -244,7 +241,7 @@ def test_reset_dealer_blackjack(MockDeck):
         card('5', 'H'), card('A', 'S'), card('6', 'D'), card('10', 'C')
     ]
     mock_deck_instance.cards_remaining.return_value = (1 * 52) - 4
-    env = CustomBlackjackEnv(num_decks=1, count_cards=False, seed=1)
+    env = CustomBlackjackEnv(num_decks=1, count_cards=False)
     
     assert env.player_hands[0].reward == -1.0
     assert env.player_hands[0].stood # Hand should be stood if game is done
@@ -259,7 +256,7 @@ def test_reset_both_blackjack_push(MockDeck):
         card('A', 'H'), card('A', 'S'), card('10', 'D'), card('10', 'C')
     ]
     mock_deck_instance.cards_remaining.return_value = (1 * 52) - 4
-    env = CustomBlackjackEnv(num_decks=1, count_cards=False, seed=1)
+    env = CustomBlackjackEnv(num_decks=1, count_cards=False)
     
     assert env.player_hands[0].reward == 0.0
     assert env.player_hands[0].stood
@@ -278,9 +275,9 @@ def test_reset_info_can_double_can_split(MockDeck):
     
     # Instantiate env within the patch to ensure its __init__ (which calls reset)
     # uses the mocked deal_card and we capture the correct initial_info.
-    env = CustomBlackjackEnv(num_decks=1, allow_doubling=True, allow_splitting=True, count_cards=False, seed=1)
+    env = CustomBlackjackEnv(num_decks=1, allow_doubling=True, allow_splitting=True, count_cards=False)
     
-    initial_obs, initial_info = env.reset(seed=1) # Explicitly call reset to get info
+    initial_obs, initial_info = env.reset() # Explicitly call reset to get info
 
     assert initial_info["can_double"] == True
     assert initial_info["can_split"] == True
@@ -297,9 +294,9 @@ def test_reset_info_no_double_no_split_if_disabled(MockDeck):
     ]
     mock_deck_instance.cards_remaining.return_value = (1 * 52) - 8
     
-    env = CustomBlackjackEnv(num_decks=1, allow_doubling=False, allow_splitting=False, count_cards=False, seed=1)
+    env = CustomBlackjackEnv(num_decks=1, allow_doubling=False, allow_splitting=False, count_cards=False)
 
-    initial_obs, initial_info = env.reset(seed=1)
+    initial_obs, initial_info = env.reset()
 
     assert initial_info["can_double"] == False
     assert initial_info["can_split"] == False
@@ -316,7 +313,7 @@ def test_step_player_hit_and_busts(MockDeck):
         card('K', 'S')  # Dealer's hit card (5+2=7, hits K=17)
     ]
     mock_deck_instance.cards_remaining.return_value = (1 * 52) - 6 # 4 initial + 1 player hit + 1 dealer hit
-    env = CustomBlackjackEnv(num_decks=1, allow_doubling=False, allow_splitting=False, count_cards=False, seed=1)
+    env = CustomBlackjackEnv(num_decks=1, allow_doubling=False, allow_splitting=False, count_cards=False)
     # After reset: P=18, D=5
     
     # Player hits
@@ -339,7 +336,7 @@ def test_step_player_hit_and_continues(MockDeck):
         card('K', 'H') # Player hits (8+10=18)
     ]
     mock_deck_instance.cards_remaining.return_value = (1 * 52) - 5
-    env = CustomBlackjackEnv(num_decks=1, allow_doubling=False, allow_splitting=False, count_cards=False, seed=1)
+    env = CustomBlackjackEnv(num_decks=1, allow_doubling=False, allow_splitting=False, count_cards=False)
     # After reset: P=8, D=5
 
     # Player hits
@@ -363,7 +360,7 @@ def test_step_player_stand_and_dealer_plays(MockDeck):
         card('3', 'C')  # Next card (not used by dealer)
     ]
     mock_deck_instance.cards_remaining.return_value = (1 * 52) - 5
-    env = CustomBlackjackEnv(num_decks=1, allow_doubling=False, allow_splitting=False, count_cards=False, seed=1)
+    env = CustomBlackjackEnv(num_decks=1, allow_doubling=False, allow_splitting=False, count_cards=False)
     # After reset: P=18, D=5 (hole 2) -> Dealer has 7
     
     # Player stands
@@ -386,7 +383,7 @@ def test_step_player_stand_and_dealer_busts(MockDeck):
         card('Q', 'H'), # Dealer hits (5+2=7 -> 7+10=17) -> (5+2+10+10=27) - BUST
     ]
     mock_deck_instance.cards_remaining.return_value = (1 * 52) - 6
-    env = CustomBlackjackEnv(num_decks=1, allow_doubling=False, allow_splitting=False, count_cards=False, seed=1)
+    env = CustomBlackjackEnv(num_decks=1, allow_doubling=False, allow_splitting=False, count_cards=False)
     # After reset: P=18, D=5 (hole 2) -> Dealer has 7
     
     # Player stands
@@ -411,7 +408,7 @@ def test_step_player_double_down_win(MockDeck):
         card('K', 'S'), # Dealer hits (5+2+10=17)
     ]
     mock_deck_instance.cards_remaining.return_value = (1 * 52) - 6
-    env = CustomBlackjackEnv(num_decks=1, allow_doubling=True, allow_splitting=False, count_cards=False, seed=1)
+    env = CustomBlackjackEnv(num_decks=1, allow_doubling=True, allow_splitting=False, count_cards=False)
     # After reset: P=9, D=5 (hole 2)
     
     # Player doubles down
@@ -436,7 +433,7 @@ def test_step_player_double_down_bust(MockDeck):
         card('A', 'S')  # Add enough cards for dealer to play out, even if player busts.
     ]
     mock_deck_instance.cards_remaining.return_value = (1 * 52) - 6 # Adjusted for one more dealer card
-    env = CustomBlackjackEnv(num_decks=1, allow_doubling=True, allow_splitting=False, count_cards=False, seed=1)
+    env = CustomBlackjackEnv(num_decks=1, allow_doubling=True, allow_splitting=False, count_cards=False)
     # After reset: P=18, D=5 (hole 2)
     
     # Player doubles down
@@ -464,7 +461,7 @@ def test_step_player_split_non_aces(MockDeck):
         card('Q', 'S'), # Dealer hits (5+2+10=17)
     ]
     mock_deck_instance.cards_remaining.return_value = (1 * 52) - 7 # 4 initial + 2 split + 1 hit by player
-    env = CustomBlackjackEnv(num_decks=1, allow_doubling=True, allow_splitting=True, count_cards=False, seed=1)
+    env = CustomBlackjackEnv(num_decks=1, allow_doubling=True, allow_splitting=True, count_cards=False)
     # After reset: P=[8H, 8D], D=[5S, 2C]
     
     # Player splits
@@ -518,7 +515,7 @@ def test_step_player_split_aces(MockDeck):
         card('Q', 'C'), # Dealer hits (5+2+10=17)
     ]
     mock_deck_instance.cards_remaining.return_value = (1 * 52) - 7 # 4 initial + 2 split + 1 dealer hit
-    env = CustomBlackjackEnv(num_decks=1, allow_doubling=True, allow_splitting=True, count_cards=False, seed=1)
+    env = CustomBlackjackEnv(num_decks=1, allow_doubling=True, allow_splitting=True, count_cards=False)
     # After reset: P=[AH, AD], D=[5S, 2C]
     
     # Player splits aces
@@ -556,7 +553,7 @@ def test_step_invalid_action(MockDeck):
         card('K', 'H'), card('3', 'S') # Additional cards for dealer to play out
     ]
     mock_deck_instance.cards_remaining.return_value = (1 * 52) - 6 # Adjusted for more dealer cards
-    env = CustomBlackjackEnv(num_decks=1, allow_doubling=False, allow_splitting=False, count_cards=False, seed=1)
+    env = CustomBlackjackEnv(num_decks=1, allow_doubling=False, allow_splitting=False, count_cards=False)
     # After reset: P=15, D=5
     
     # Attempt an invalid action (e.g., Double Down when not allowed)
@@ -581,7 +578,7 @@ def test_dealer_plays_stands(MockDeck):
     mock_deck_instance.deal_card.side_effect = [
         card('2', 'H'), card('2', 'D'), card('2', 'C'), card('2', 'S') # Dummy cards for init
     ]
-    env = CustomBlackjackEnv(num_decks=1, count_cards=False, seed=1)
+    env = CustomBlackjackEnv(num_decks=1, count_cards=False)
     env.dealer_hand = [card('10', 'S'), card('7', 'C')] # Force dealer hand to 17
     
     env._dealer_plays()
@@ -598,7 +595,7 @@ def test_dealer_plays_hits_and_stands(MockDeck):
         card('2', 'H'), card('2', 'D'), card('2', 'C'), card('2', 'S'), # Dummy cards for init
         card('K', 'H') # Dealer hits (5+2=7 -> 7+10=17)
     ]
-    env = CustomBlackjackEnv(num_decks=1, count_cards=False, seed=1)
+    env = CustomBlackjackEnv(num_decks=1, count_cards=False)
     env.dealer_hand = [card('5', 'S'), card('2', 'C')] # Force dealer hand to 7
     
     env._dealer_plays()
@@ -617,7 +614,7 @@ def test_dealer_plays_hits_and_busts(MockDeck):
         card('5', 'H'), # Dealer hits (5+2=7 -> 7+5=12)
         card('Q', 'D')  # Dealer hits (12+10=22) - BUST
     ]
-    env = CustomBlackjackEnv(num_decks=1, count_cards=False, seed=1)
+    env = CustomBlackjackEnv(num_decks=1, count_cards=False)
     env.dealer_hand = [card('5', 'S'), card('2', 'C')] # Force dealer hand to 7
     
     env._dealer_plays()
@@ -634,7 +631,7 @@ def test_dealer_plays_soft_17_hit(MockDeck):
         card('2', 'H'), card('2', 'D'), card('2', 'C'), card('2', 'S'), # Dummy cards for init
         card('2', 'H') # Dealer hits (17+2=19)
     ]
-    env = CustomBlackjackEnv(num_decks=1, count_cards=False, seed=1, dealer_hits_on_soft_17=True)
+    env = CustomBlackjackEnv(num_decks=1, count_cards=False, dealer_hits_on_soft_17=True)
     env.dealer_hand = [card('A', 'S'), card('6', 'C')] # Force dealer hand to soft 17
     
     env._dealer_plays()
@@ -651,7 +648,7 @@ def test_dealer_plays_soft_17_stands(MockDeck):
     mock_deck_instance.deal_card.side_effect = [
         card('2', 'H'), card('2', 'D'), card('2', 'C'), card('2', 'S') # Dummy cards for init
     ]
-    env = CustomBlackjackEnv(num_decks=1, count_cards=False, seed=1, dealer_hits_on_soft_17=False)
+    env = CustomBlackjackEnv(num_decks=1, count_cards=False, dealer_hits_on_soft_17=False)
     env.dealer_hand = [card('A', 'S'), card('6', 'C')] # Force dealer hand to soft 17
     
     env._dealer_plays()
@@ -710,13 +707,13 @@ def test_env_reset_reproducibility():
 
     # Patch Deck to return a new mock instance with the defined sequence each time it's called
     with patch('src.env.env.Deck', side_effect=lambda num_decks, seed, reshuffle_threshold_pct: create_mock_deck_with_sequence(initial_deal_sequence)) as MockDeckClass:
-        env1 = CustomBlackjackEnv(num_decks=1, count_cards=True, seed=123)
-        env2 = CustomBlackjackEnv(num_decks=1, count_cards=True, seed=123)
+        env1 = CustomBlackjackEnv(num_decks=1, count_cards=True)
+        env2 = CustomBlackjackEnv(num_decks=1, count_cards=True)
 
         # Resetting explicitly, which will cause CustomBlackjackEnv to create a NEW Deck
         # This new Deck will also be a mock with the same initial_deal_sequence
-        obs1, info1 = env1.reset(seed=123)
-        obs2, info2 = env2.reset(seed=123)
+        obs1, info1 = env1.reset(23)
+        obs2, info2 = env2.reset(23)
 
         assert obs1 == obs2
         assert info1 == info2
@@ -747,8 +744,8 @@ def test_env_step_reproducibility():
 
     # Patch Deck to return a new mock instance with the defined sequence each time it's called
     with patch('src.env.env.Deck', side_effect=create_mock_deck_for_step_test) as MockDeckClass:
-        env1 = CustomBlackjackEnv(num_decks=1, allow_doubling=False, allow_splitting=False, count_cards=False, seed=123)
-        env2 = CustomBlackjackEnv(num_decks=1, allow_doubling=False, allow_splitting=False, count_cards=False, seed=123)
+        env1 = CustomBlackjackEnv(num_decks=1, allow_doubling=False, allow_splitting=False, count_cards=False)
+        env2 = CustomBlackjackEnv(num_decks=1, allow_doubling=False, allow_splitting=False, count_cards=False)
 
         # Perform the same action sequence
         action = ACTION_HIT # Player hits
