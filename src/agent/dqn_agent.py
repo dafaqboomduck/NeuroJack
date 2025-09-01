@@ -199,16 +199,13 @@ class DQNAgent:
                 total_reward = 0
 
                 while not done:
-                    available_actions = [True, True]
-
-                    if env.allow_doubling:
-                        available_actions.append(info.get('can_double', False))
-                    if env.allow_splitting:
-                        available_actions.append(info.get('can_split', False))
-
-                    while len(available_actions) < self.num_actions:
-                        available_actions.append(False)
-
+                    available_actions = [
+                        True,  # ACTION_HIT is always allowed
+                        True,  # ACTION_STAND is always allowed
+                        env.allow_doubling and info.get('can_double', False),  # ACTION_DOUBLE
+                        env.allow_splitting and info.get('can_split', False),  # ACTION_SPLIT
+                    ]
+                
                     action = self.choose_action(state, available_actions)
 
                     next_obs, reward, done, info = env.step(action)
