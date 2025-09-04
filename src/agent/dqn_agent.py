@@ -5,8 +5,8 @@ import tensorflow as tf
 from tensorflow import keras
 import random
 import logging
-from tqdm.auto import tqdm # Changed import to tqdm.auto for better compatibility\
-from typing import Tuple, Union # Import Union and Tuple for type hints
+from tqdm.auto import tqdm # Changed import to tqdm.auto for better compatibility
+from typing import Tuple, Union, Optional # Import Optional for type hints
 
 # Configure logging for the DQN agent
 logger = logging.getLogger(__name__)
@@ -26,9 +26,10 @@ class DQNAgent:
                  epsilon_decay=0.995,
                  replay_buffer_capacity=10000,
                  target_update_freq=100,
-                 train_freq=1, # <--- ADDED: New parameter for training frequency
+                 train_freq=1,
                  verbose=1,
-                 model_name="DQN"):
+                 model_name="DQN",
+                 q_net_model: Optional[keras.Model] = None): # New parameter for a custom Q-network model
 
         # Dynamically derive state_size, num_actions, num_decks, and use_card_count from the environment
         self.state_size = env.state_size
@@ -42,16 +43,24 @@ class DQNAgent:
         self.epsilon_decay = epsilon_decay
         self.target_update_freq = target_update_freq
         self.replay_buffer_capacity = replay_buffer_capacity
-        self.train_freq = train_freq # <--- STORED: Store the new parameter
+        self.train_freq = train_freq
         self.verbose = bool(verbose)
         self.model_name = model_name
 
         # Set logger level based on verbose
         logger.setLevel(logging.INFO if self.verbose else logging.CRITICAL)
 
-        # Build Q-networks with the dynamically determined state_size
-        self.q_net = build_q_model(input_shape=(self.state_size,), num_actions=self.num_actions)
-        self.target_q_net = build_q_model(input_shape=(self.state_size,), num_actions=self.num_actions)
+        # Build Q-networks based on the provided model or a default one
+        if q_net_model is None:
+            # Use the default model if none is provided
+            self.q_net = build_q_model(input_shape=(self.state_size,), num_actions=self.num_actions)
+        else:
+            # Use the custom model provided by the user
+            self.q_net = q_net_model
+            logger.info("Using custom Q-network model provided by user.")
+
+        # Create a separate target Q-network with the same architecture and initial weights
+        self.target_q_net = keras.models.clone_model(self.q_net)
         self.target_q_net.set_weights(self.q_net.get_weights())
 
         # Optimizer and Loss
@@ -90,10 +99,11 @@ class DQNAgent:
         if self.use_card_count:
             max_running_count_abs = self.num_decks * 10
             running_count_norm = running_count / max_running_count_abs
-
-            max_true_count_abs = self.num_decks * 2
-            true_count_norm = true_count / max_true_count_abs
-
+            
+            # true_count_norm = true_count / max_true_count_abs is not needed. The user needs to normalize based on the number of cards in the deck
+            # The count depends on the number of decks being played
+            true_count_norm = true_count / self.num_decks
+            
             state_vector.append(running_count_norm)
             state_vector.append(true_count_norm)
 
