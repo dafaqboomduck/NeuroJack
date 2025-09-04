@@ -12,12 +12,6 @@ from src.env.card import Card
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING) # Set to INFO for general messages, DEBUG for detailed tracing
 
-# Define action constants for clarity
-ACTION_STAND = 0
-ACTION_HIT = 1
-ACTION_DOUBLE_DOWN = 2
-ACTION_SPLIT = 3
-
 class CustomBlackjackEnv:
     """
     Custom Blackjack Environment with additional rules and card counting,
@@ -25,10 +19,10 @@ class CustomBlackjackEnv:
 
     Observation Space:
     Tuple: (player_current_sum, dealer_card_showing, usable_ace[, running_count, true_count])
-    - player_current_sum: Sum of player's current hand (int, 2–22).\n
-    - dealer_card_showing: Value of dealer's visible card (int, 1–11, Ace=11).\n
-    - usable_ace: Whether player has a usable ace (int, 0 or 1).\n
-    - running_count: Current Hi-Lo running count (if count_cards=True)\n
+    - player_current_sum: Sum of player's current hand (int, 2–22).
+    - dealer_card_showing: Value of dealer's visible card (int, 1–11, Ace=11).
+    - usable_ace: Whether player has a usable ace (int, 0 or 1).
+    - running_count: Current Hi-Lo running count (if count_cards=True)
     - true_count: Current Hi-Lo true count (running_count / decks_remaining) (if count_cards=True)
 
     Action Space:
@@ -47,20 +41,38 @@ class CustomBlackjackEnv:
         self.allow_doubling = allow_doubling
         self.allow_splitting = allow_splitting
         self.count_cards = count_cards
-        # Removed self.seed as it's no longer used for reproducibility
         self.render_mode = render_mode
         self.dealer_hits_on_soft_17 = dealer_hits_on_soft_17
         self.reshuffle_threshold_pct = reshuffle_threshold_pct
+
+        # Define action constants with dynamic numbering
+        self.ACTION_STAND = 0
+        self.ACTION_HIT = 1
+
+        # Start numbering at 2
+        next_action = 2
+        if self.allow_doubling:
+            self.ACTION_DOUBLE_DOWN = next_action
+            next_action += 1
+        else:
+            self.ACTION_DOUBLE_DOWN = None  # keep the constant, but mark as unavailable
+
+        if self.allow_splitting:
+            self.ACTION_SPLIT = next_action
+        else:
+            self.ACTION_SPLIT = None  # keep the constant, but mark as unavailable
 
         self.observation_description = (
             "(player_current_sum, dealer_card_showing, usable_ace"
             + (", running_count, true_count)" if self.count_cards else ")")
         )
-        actions = ["0: Stand", "1: Hit"]
-        if self.allow_doubling:
-            actions.append("2: Double Down")
-        if self.allow_splitting:
-            actions.append("3: Split")
+        
+        # Generate action descriptions dynamically
+        actions = [f"{self.ACTION_STAND}: Stand", f"{self.ACTION_HIT}: Hit"]
+        if self.ACTION_DOUBLE_DOWN is not None:
+            actions.append(f"{self.ACTION_DOUBLE_DOWN}: Double Down")
+        if self.ACTION_SPLIT is not None:
+            actions.append(f"{self.ACTION_SPLIT}: Split")
         self.action_description = ", ".join(actions)
 
         # Initialize Deck without a seed, so it uses system randomness
@@ -241,7 +253,7 @@ class CustomBlackjackEnv:
 
         current_hand_resolved = False # Flag to indicate if current hand's play is finished
 
-        if action == ACTION_HIT:
+        if action == self.ACTION_HIT:
             logger.debug(f"Hand {self.current_hand_index + 1}: Player hits.")
             self._deal_card(current_player_hand_obj, face_up=True)
             player_sum, _ = self._update_hand_value(current_player_hand_obj.cards)
@@ -253,11 +265,11 @@ class CustomBlackjackEnv:
                 current_player_hand_obj.stood = True # Mark hand as stood when it busts
                 current_hand_resolved = True
             # Else, hand is not resolved yet, player can continue to hit/stand
-        elif action == ACTION_STAND:
+        elif action == self.ACTION_STAND:
             logger.debug(f"Hand {self.current_hand_index + 1}: Player stands ({self._update_hand_value(current_player_hand_obj.cards)[0]}).")
             current_player_hand_obj.stood = True
             current_hand_resolved = True
-        elif action == ACTION_DOUBLE_DOWN and self.allow_doubling and is_first_action:
+        elif action == self.ACTION_DOUBLE_DOWN and self.allow_doubling and is_first_action:
             logger.debug(f"Hand {self.current_hand_index + 1}: Player doubles down.")
             self._deal_card(current_player_hand_obj, face_up=True)
             player_sum, _ = self._update_hand_value(current_player_hand_obj.cards)
@@ -267,7 +279,7 @@ class CustomBlackjackEnv:
                 current_player_hand_obj.reward = -1.0 * 2 # Double penalty for bust on double down
                 logger.info(f"Hand {self.current_hand_index + 1}: Player busts on double down ({player_sum}). Reward: {current_player_hand_obj.reward}")
             current_hand_resolved = True
-        elif action == ACTION_SPLIT and self.allow_splitting and is_first_action and \
+        elif action == self.ACTION_SPLIT and self.allow_splitting and is_first_action and \
              current_player_hand_cards[0].rank == current_player_hand_cards[1].rank:
             logger.debug(f"Hand {self.current_hand_index + 1}: Player splits.")
             card1, card2 = current_player_hand_cards
