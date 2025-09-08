@@ -14,9 +14,8 @@ def build_q_model(input_shape=(3,), num_actions=2):
     with tf.device('/GPU:0'):
         model = keras.Sequential([
             keras.layers.Input(shape=input_shape),
-            keras.layers.Dense(128, activation='relu'),
-            keras.layers.Dense(128, activation='relu'),
-            keras.layers.Dense(128, activation='relu'),
+            keras.layers.Dense(64, activation='relu'),
+            keras.layers.Dense(64, activation='relu'),
             keras.layers.Dense(num_actions)
         ])
     return model

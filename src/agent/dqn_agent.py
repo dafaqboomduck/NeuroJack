@@ -23,7 +23,7 @@ class DQNAgent:
                  gamma=0.99,
                  epsilon_start=1.0,
                  epsilon_end=0.01,
-                 epsilon_decay=0.995,
+                 epsilon_decay=0.99,
                  replay_buffer_capacity=10000,
                  target_update_freq=100,
                  train_freq=1,

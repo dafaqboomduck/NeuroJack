@@ -32,8 +32,8 @@ class CustomBlackjackEnv:
     3: Split (if allowed)
     """
 
-    def __init__(self, render_mode: Optional[str] = None, num_decks: int = 6, blackjack_payout: float = 1.5,
-                 allow_doubling: bool = True, allow_splitting: bool = True, count_cards: bool = True,
+    def __init__(self, render_mode: Optional[str] = None, num_decks: int = 1, blackjack_payout: float = 1.5,
+                 allow_doubling: bool = False, allow_splitting: bool = False, count_cards: bool = False,
                  dealer_hits_on_soft_17: bool = True,
                  reshuffle_threshold_pct: float = 0.25):
         self.num_decks = num_decks
