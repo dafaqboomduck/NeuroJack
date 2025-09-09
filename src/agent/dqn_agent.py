@@ -7,6 +7,7 @@ import random
 import logging
 from tqdm.auto import tqdm # Changed import to tqdm.auto for better compatibility
 from typing import Tuple, Union, Optional # Import Optional for type hints
+import matplotlib.pyplot as plt 
 
 # Configure logging for the DQN agent
 logger = logging.getLogger(__name__)
@@ -359,6 +360,25 @@ class DQNAgent:
             return average_reward, win_rate, push_rate, loss_rate
         else:
             return average_reward
+
+    def _smooth(self, x, w=100):
+        """
+        Smooths a 1D array using a moving average.
+        """
+        return np.convolve(x, np.ones(w)/w, mode='valid')
+
+    def plot_history(self, history, smooth_window: int = 1000):
+        """
+        Plots the training history.
+        """
+        # Plotting the smoothed rewards
+        plt.figure(figsize=(12, 6))
+        plt.plot(self._smooth(history, w=smooth_window))  # Call the private method with self
+        plt.title("DQN Training Rewards (Smoothed)")
+        plt.xlabel("Episodes")
+        plt.ylabel("Average Reward")
+        plt.grid(True)
+        plt.show()
 
     def save_weights(self, path: str = None):
         """
