@@ -1,9 +1,21 @@
+# blackjack_rl/env/env.py
+"""
+This module implements a custom, highly configurable Blackjack environment.
+It does not rely on the standard Gymnasium library, allowing for tailored
+rules, such as card counting, doubling down, and splitting.
+
+The environment simulates a game of Blackjack between a single player and a
+dealer. It provides a state representation suitable for reinforcement learning
+agents and handles all game mechanics, including card dealing, hand evaluation,
+player actions, and reward calculation.
+"""
+
 import numpy as np
 import random
 import logging
 from typing import List, Tuple, Dict, Union, Any, Optional
 
-# Assuming Card, Deck, PlayerHand are imported from their respective files
+# Core components: (Card, Deck, PlayerHand) are imported
 from src.env.playerhand import PlayerHand
 from src.env.deck import Deck
 from src.env.card import Card
@@ -29,13 +41,27 @@ class CustomBlackjackEnv:
     0: Stand
     1: Hit
     2: Double Down (if allowed)
-    3: Split (if allowed)
+    2/3: Split (if allowed)
     """
 
     def __init__(self, render_mode: Optional[str] = None, num_decks: int = 1, blackjack_payout: float = 1.5,
                  allow_doubling: bool = False, allow_splitting: bool = False, count_cards: bool = False,
                  dealer_hits_on_soft_17: bool = True,
                  reshuffle_threshold_pct: float = 0.25):
+        """
+        Initializes the Blackjack environment.
+
+        Args:
+            render_mode (str): The rendering mode ('human' or None).
+            num_decks (int): The number of decks to use.
+            blackjack_payout (float): The payout for a player blackjack.
+            allow_doubling (bool): Whether the 'Double Down' action is enabled.
+            allow_splitting (bool): Whether the 'Split' action is enabled.
+            count_cards (bool): Whether to track a running and true count for card counting.
+            dealer_hits_on_soft_17 (bool): Whether the dealer hits on a soft 17.
+            reshuffle_threshold_pct (float): The percentage of cards remaining in the deck at
+                                             which the deck is reshuffled.
+        """
         self.num_decks = num_decks
         self.blackjack_payout = blackjack_payout
         self.allow_doubling = allow_doubling
@@ -49,7 +75,7 @@ class CustomBlackjackEnv:
         self.ACTION_STAND = 0
         self.ACTION_HIT = 1
 
-        # Start numbering at 2
+        # Start numbering at 2 for optional actions
         next_action = 2
         if self.allow_doubling:
             self.ACTION_DOUBLE_DOWN = next_action
@@ -66,8 +92,8 @@ class CustomBlackjackEnv:
             "(player_current_sum, dealer_card_showing, usable_ace"
             + (", running_count, true_count)" if self.count_cards else ")")
         )
-        
-        # Generate action descriptions dynamically
+
+        # Generate action descriptions dynamically for clarity
         actions = [f"{self.ACTION_STAND}: Stand", f"{self.ACTION_HIT}: Hit"]
         if self.ACTION_DOUBLE_DOWN is not None:
             actions.append(f"{self.ACTION_DOUBLE_DOWN}: Double Down")
@@ -86,15 +112,29 @@ class CustomBlackjackEnv:
 
     @property
     def state_size(self) -> int:
-        # This property dynamically returns the correct state size
+        """
+        Dynamically returns the size of the state observation.
+        """
         return 5 if self.count_cards else 3
 
     @property
     def num_actions(self) -> int:
-        # Always 0 and 1 (Stand, Hit), and conditionally Double Down and Split
+        """
+        Dynamically returns the number of available actions.
+        """
         return 2 + int(self.allow_doubling) + int(self.allow_splitting)
 
     def _update_hand_value(self, hand_cards: List[Card]) -> Tuple[int, bool]:
+        """
+        Calculates the sum and usable ace status of a hand.
+
+        Args:
+            hand_cards (List[Card]): The cards in the hand.
+
+        Returns:
+            Tuple[int, bool]: A tuple containing the hand sum and a boolean
+                              indicating if there is a usable ace.
+        """
         hand_sum_soft = 0 # Sum with all Aces as 11 initially
         num_aces_in_hand = 0
         for card in hand_cards:
@@ -114,12 +154,23 @@ class CustomBlackjackEnv:
 
         # A usable ace exists if there was at least one ace originally,
         # and after adjustments, at least one ace is still counted as 11.
-        # This is equivalent to: current_sum <= 21 AND aces_remaining_as_11 > 0
         usable_ace = (current_sum <= 21 and aces_remaining_as_11 > 0)
 
         return current_sum, usable_ace
 
     def _deal_card(self, hand_obj_or_list: Union[PlayerHand, List[Card]], face_up: bool = True, is_initial_deal: bool = False) -> Card:
+        """
+        Deals a card from the deck to a specified hand.
+
+        Args:
+            hand_obj_or_list (Union[PlayerHand, List[Card]]): The hand to deal to.
+            face_up (bool): True if the card is dealt face up, False otherwise.
+            is_initial_deal (bool): True if this is part of the initial deal,
+                                    which affects card counting logic.
+
+        Returns:
+            Card: The dealt card.
+        """
         card = self.deck.deal_card()
         if isinstance(hand_obj_or_list, PlayerHand):
             hand_obj_or_list.add_card(card)
@@ -137,11 +188,18 @@ class CustomBlackjackEnv:
         return card
 
     def _get_obs(self) -> Union[Tuple[int, int, int], Tuple[int, int, int, int, int]]:
-        # This method should always be called with a valid current_hand_index
-        # or when the game is fully resolved and we need a final observation.
+        """
+        Returns the current observation of the environment's state.
+
+        This method should always be called with a valid current_hand_index or when
+        the game is fully resolved to get the final observation.
+
+        Returns:
+            Union[Tuple[int, int, int], Tuple[int, int, int, int, int]]: The observation tuple.
+        """
+        # If all player hands are resolved, this is a valid state for _get_obs to be called
+        # to get the final observation. No warning is needed here.
         if not (0 <= self.current_hand_index < len(self.player_hands)):
-            # If all player hands are resolved, this is a valid state for _get_obs to be called
-            # to get the final observation. No warning is needed here.
             player_sum_for_obs = self._update_hand_value(self.player_hands[0].cards)[0] if self.player_hands else 0
             dealer_showing_value = self.dealer_hand[0].value
             usable_ace_for_obs = self._update_hand_value(self.player_hands[0].cards)[1] if self.player_hands else 0
@@ -152,7 +210,6 @@ class CustomBlackjackEnv:
                 true_count = round(self.running_count / decks_remaining)
                 obs += (self.running_count, true_count)
             return obs
-
 
         current_player_hand_cards = self.player_hands[self.current_hand_index].cards
         player_sum, usable_ace = self._update_hand_value(current_player_hand_cards)
@@ -167,14 +224,19 @@ class CustomBlackjackEnv:
         return obs
 
     def reset(self, seed: Optional[int] = None, options: Optional[Dict[str, Any]] = None) -> Tuple[Tuple[int, ...], Dict[str, bool]]:
-        # Removed seed parameter and logic from reset, as the environment will now be truly random
+        """
+        Resets the environment to its initial state for a new game.
+
+        Returns:
+            Tuple[Tuple[int, ...], Dict[str, bool]]: The initial observation and an info dictionary.
+        """
         # Re-initialize Deck without a seed for each reset
         self.deck = Deck(self.num_decks, seed=None, reshuffle_threshold_pct=self.reshuffle_threshold_pct)
 
         self.player_hands = [PlayerHand()]
         self.dealer_hand = []
         self.current_hand_index = 0
-        self.running_count = 0 # Reset running count on new shoe
+        self.running_count = 0 # Reset running count on a new shoe
 
         # Initial deal - deal cards but don't update running_count yet,
         # calculate it explicitly for initial face-up cards
@@ -200,6 +262,7 @@ class CustomBlackjackEnv:
         player_blackjack = (player_sum == 21 and len(self.player_hands[0].cards) == 2)
         dealer_blackjack = (dealer_sum == 21 and len(self.dealer_hand) == 2)
 
+        # Check for immediate end of game due to Blackjacks
         if player_blackjack and dealer_blackjack:
             reward = 0.0
             done = True
@@ -218,6 +281,7 @@ class CustomBlackjackEnv:
             logger.info(f"Reset: Dealer Blackjack. Reward: {reward}")
 
         if not done:
+            # Check for allowed actions on the initial hand
             if self.allow_doubling:
                 info["can_double"] = True
             if self.allow_splitting and self.player_hands[0].cards[0].rank == self.player_hands[0].cards[1].rank:
@@ -226,7 +290,7 @@ class CustomBlackjackEnv:
         if done:
             self.player_hands[0].reward = reward
             # FIX: Set player hand to stood if game ends on initial deal (blackjack, push, or dealer blackjack)
-            self.player_hands[0].stood = True 
+            self.player_hands[0].stood = True
 
         observation = self._get_obs() # Get the initial observation based on the current state
         if self.render_mode == 'human':
@@ -235,6 +299,17 @@ class CustomBlackjackEnv:
         return observation, info
 
     def step(self, action: int) -> Tuple[Tuple[int, ...], float, bool, Dict[str, bool]]:
+        """
+        Processes a player's action and advances the environment state.
+
+        Args:
+            action (int): The action to take (0: stand, 1: hit, 2: double down, 3: split).
+
+        Returns:
+            Tuple[Tuple[int, ...], float, bool, Dict[str, bool]]: A tuple containing
+            the next observation, the final reward for the game (only non-zero if done),
+            a boolean indicating if the episode is done, and an info dictionary.
+        """
         reward = 0.0
         done = False
         info: Dict[str, bool] = {"can_double": False, "can_split": False}
@@ -246,7 +321,7 @@ class CustomBlackjackEnv:
 
         current_player_hand_obj = self.player_hands[self.current_hand_index]
         current_player_hand_cards = current_player_hand_obj.cards
-        
+
         is_first_action = (len(current_player_hand_cards) == 2 and
                            not current_player_hand_obj.stood and
                            not current_player_hand_obj.double_down)
@@ -367,7 +442,9 @@ class CustomBlackjackEnv:
         """
         Advances the current_hand_index to the next active player hand.
         If all player hands are resolved, the dealer plays and game ends.
-        Returns True if the game is done, False otherwise.
+
+        Returns:
+            bool: True if the game is done, False otherwise.
         """
         while self.current_hand_index < len(self.player_hands) and self.player_hands[self.current_hand_index].stood:
             self.current_hand_index += 1
@@ -387,7 +464,10 @@ class CustomBlackjackEnv:
         return False # Not all player hands are done yet
 
     def _dealer_plays(self) -> None:
-        """Dealer hits until sum is 17 or more."""
+        """
+        Handles the dealer's turn. The dealer hits until their hand sum is 17 or more.
+        This behavior can be modified by the 'dealer_hits_on_soft_17' setting.
+        """
         # Reveal dealer's hole card and update count
         if self.count_cards and len(self.dealer_hand) == 2:
             self.running_count += self.dealer_hand[1].count_value
@@ -411,6 +491,16 @@ class CustomBlackjackEnv:
                 break
 
     def _calculate_reward(self, player_hand_cards: List[Card]) -> float:
+        """
+        Calculates the reward for a single player hand based on the final
+        outcome against the dealer's hand.
+
+        Args:
+            player_hand_cards (List[Card]): The cards in the player's hand.
+
+        Returns:
+            float: The reward value (1.0 for win, -1.0 for loss, 0.0 for push).
+        """
         player_sum, _ = self._update_hand_value(player_hand_cards)
         dealer_sum, _ = self._update_hand_value(self.dealer_hand)
 
@@ -434,6 +524,9 @@ class CustomBlackjackEnv:
             return 0.0 # Push
 
     def render(self) -> None:
+        """
+        Renders the current state of the game to the console.
+        """
         if self.render_mode != 'human':
             return
 
@@ -468,4 +561,7 @@ class CustomBlackjackEnv:
         print("----------------------")
 
     def close(self) -> None:
+        """
+        A placeholder for any cleanup required by the environment.
+        """
         pass
