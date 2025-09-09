@@ -67,7 +67,7 @@ class DoubleDQNAgent(DQNAgent):
         both selection and evaluation.
 
         The target Q-value calculation is defined by the following equation:
-        $Q_{target} = R_{t+1} + \gamma * Q_{target}(S_{t+1}, \underset{a}{\operatorname{argmax}} Q_{main}(S_{t+1}, a))$
+        "$Q_{target} = R_{t+1} + \\gamma * Q_{target}(S_{t+1}, \\underset{a}{\operatorname{argmax}} Q_{main}(S_{t+1}, a))$"
         where:
         - $R_{t+1}$ is the reward at the next step.
         - $\gamma$ is the discount factor.
