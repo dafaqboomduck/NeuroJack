@@ -16,9 +16,9 @@ import logging
 from typing import List, Tuple, Dict, Union, Any, Optional
 
 # Core components: (Card, Deck, PlayerHand) are imported
-from src.env.playerhand import PlayerHand
-from src.env.deck import Deck
-from src.env.card import Card
+from neurojack.env.playerhand import PlayerHand
+from neurojack.env.deck import Deck
+from neurojack.env.card import Card
 
 # Configure logging for the environment
 logger = logging.getLogger(__name__)

@@ -5,10 +5,10 @@ import numpy as np
 import logging
 from unittest.mock import MagicMock, patch
 
-from src.env.env import CustomBlackjackEnv, ACTION_STAND, ACTION_HIT, ACTION_DOUBLE_DOWN, ACTION_SPLIT
-from src.env.card import Card
-from src.env.playerhand import PlayerHand
-from src.env.deck import Deck # Import Deck to mock or inspect its behavior if needed
+from neurojack.env.env import CustomBlackjackEnv, ACTION_STAND, ACTION_HIT, ACTION_DOUBLE_DOWN, ACTION_SPLIT
+from neurojack.env.card import Card
+from neurojack.env.playerhand import PlayerHand
+from neurojack.env.deck import Deck # Import Deck to mock or inspect its behavior if needed
 
 # Suppress environment's INFO/DEBUG logs during testing for cleaner output
 # You can change this to logging.INFO or logging.DEBUG if you want to see env logs during test runs

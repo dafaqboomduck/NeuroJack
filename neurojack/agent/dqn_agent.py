@@ -15,8 +15,8 @@ logger = logging.getLogger(__name__)
 
 
 # Import required modules
-from src.model.q_model import build_q_model
-from src.memory.replay_buffer import ReplayBuffer
+from neurojack.model.q_model import build_q_model
+from neurojack.memory.replay_buffer import ReplayBuffer
 
 class DQNAgent:
     """
