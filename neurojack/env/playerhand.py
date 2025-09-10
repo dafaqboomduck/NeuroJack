@@ -1,5 +1,5 @@
 from typing import List, Optional
-from NeuroJack.env.card import Card
+from neurojack.env.card import Card
 
 class PlayerHand:
     """

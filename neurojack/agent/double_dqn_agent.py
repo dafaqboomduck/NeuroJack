@@ -7,7 +7,7 @@ import logging
 from tqdm.auto import tqdm
 from typing import Tuple, Union, Optional
 
-from NeuroJack.agent import DQNAgent
+from neurojack.agent import DQNAgent
 
 # Configure logging for the Double DQN agent
 # The logging level will be set dynamically in __init__ based on the verbose parameter

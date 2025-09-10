@@ -16,7 +16,7 @@ dependencies = [
 ]
 
 [tool.poetry]
-packages = [{include = "NeuroJack"}]
+packages = [{include = "neurojack"}]
 
 
 [build-system]
