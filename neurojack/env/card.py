@@ -1,4 +1,4 @@
-from neurojack.env.values import CARD_VALUES, HI_LO_COUNT_VALUES
+from NeuroJack.env.values import CARD_VALUES, HI_LO_COUNT_VALUES
 
 class Card:
     """

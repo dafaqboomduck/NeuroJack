@@ -1,8 +1,8 @@
 import random
 import logging
 from typing import List, Optional
-from neurojack.env.card import Card
-from neurojack.env.values import RANKS, SUITS
+from NeuroJack.env.card import Card
+from NeuroJack.env.values import RANKS, SUITS
 
 # Configure logging for the deck module
 logger = logging.getLogger(__name__)
