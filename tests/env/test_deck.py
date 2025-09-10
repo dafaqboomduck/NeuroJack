@@ -1,9 +1,9 @@
 # tests/env/test_deck.py
 
 import pytest
-from src.env.deck import Deck
-from src.env.card import Card
-from src.env.values import RANKS, SUITS
+from neurojack.env.deck import Deck
+from neurojack.env.card import Card
+from neurojack.env.values import RANKS, SUITS
 import random # Import standard random for comparison if needed
 
 # --- Fixtures for Deck instances ---

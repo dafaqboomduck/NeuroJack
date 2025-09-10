@@ -1,8 +1,8 @@
 # tests/env/test_playerhand.py
 
 import pytest
-from src.env.playerhand import PlayerHand
-from src.env.card import Card # PlayerHand depends on Card
+from neurojack.env.playerhand import PlayerHand
+from neurojack.env.card import Card # PlayerHand depends on Card
 
 # --- Fixtures for common Card instances ---
 @pytest.fixture

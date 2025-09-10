@@ -1,8 +1,8 @@
 # tests/env/test_card.py
 
 import pytest
-from src.env.card import Card
-from src.env.values import CARD_VALUES, HI_LO_COUNT_VALUES
+from neurojack.env.card import Card
+from neurojack.env.values import CARD_VALUES, HI_LO_COUNT_VALUES
 
 # --- Fixtures for common Card instances ---
 @pytest.fixture
