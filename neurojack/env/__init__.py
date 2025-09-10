@@ -1,1 +1,1 @@
-from .env import CustomBlackjackEnv
+from .env import BlackjackEnv
