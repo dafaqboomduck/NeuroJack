@@ -13,10 +13,11 @@ dependencies = [
     "tqdm (==4.67.1)",
     "tensorflow-io-gcs-filesystem (>0.28.0,<0.30.0)",
     "tensorflow (==2.18.0)",
+    "matplotlib-inline (>=0.1.7,<0.2.0)",
 ]
 
 [tool.poetry]
-packages = [{include = "neurojack", from = "neurojack"}]
+packages = [{include = "neurojack"}]
 
 
 [build-system]

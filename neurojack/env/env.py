@@ -24,7 +24,7 @@ from neurojack.env.card import Card
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING) # Set to INFO for general messages, DEBUG for detailed tracing
 
-class CustomBlackjackEnv:
+class BlackjackEnv:
     """
     Custom Blackjack Environment with additional rules and card counting,
     without relying on Gymnasium.
