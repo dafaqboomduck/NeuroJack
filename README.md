@@ -54,9 +54,22 @@ The `DoubleDQNAgent` extends the standard DQN approach to address overestimation
 
 ## Project Structure
 
-- **`NeuroJack.env`** → Custom Blackjack environment  
-- **`NeuroJack.dqn_agent`** → Standard DQN agent implementation  
-- **`NeuroJack.double_dqn_agent`** → Double DQN agent implementation  
+- `/neurojack/env/` → Custom Blackjack environment
+
+  - `card.py` → Defines the Card class, handling suits and values.
+  - `deck.py` → Implements the Deck class for card management.
+  - `env.py` → Core Blackjack environment logic.
+  - `playerhand.py` → Manages a player's hand and hand values.
+  - `values.py` → Defines constants for card values.
+
+- `/neurojack/agent/` → Agent implementations
+
+  - `dqn_agent.py` → Standard DQN agent.
+  - `double_dqn_agent.py` → Double DQN agent.
+
+- `/neurojack/memory/replay_buffer.py` → Implements the replay buffer for experience storage.
+
+- `/neurojack/model/q_model.py` → Defines the Q-network model.
 
 This modular design allows easy switching between different agents and experimentation with various reinforcement learning strategies while keeping the core Blackjack logic consistent.
 
