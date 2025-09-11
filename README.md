@@ -1,12 +1,23 @@
-# Blackjack Reinforcement Learning
+# NeuroJack
 
+### A Blackjack Reinforcement Learning Project
 This project implements a reinforcement learning system to train an agent to play Blackjack. It features a custom environment and two types of Deep Q-Learning (DQN) agents to explore different learning strategies.
+
+## Instalation
+You can install the `neurojack` package using pip.
+To do this, use the following command in your terminal:
+```bash
+pip install neurojack
+```
+**Note**: This package is hosted on the PyPI (Python Package Index) repository. Ensure your pip configuration is up to date and allows installations from https://pypi.org/simple/
+
+
 
 ---
 
 ## 1. `env.py`: The Custom Blackjack Environment
 
-The `CustomBlackjackEnv` class defines a flexible and highly configurable Blackjack game environment. It is built from scratch to allow for specific rule sets and advanced features beyond standard library environments.
+The `BlackjackEnv` class defines a flexible and highly configurable Blackjack game environment. It is built from scratch to allow for specific rule sets and advanced features beyond standard library environments.
 
 ### Key Features
 - **Customizable Rules**: Supports multiple rule variations, including different numbers of decks, variable payouts, and specific dealer rules.  
@@ -55,7 +66,7 @@ This modular design allows easy switching between different agents and experimen
 
 This project is licensed under the [MIT License](LICENSE).  
 
-Copyright (c) 2024 **dafaqboomduck**
+Copyright (c) 2024 **Razvan Nica** (dafaqboomduck)
 
 You are free to use, modify, and distribute this software in accordance with the terms of the license.  
 The software is provided **“as is”**, without warranty of any kind.  
