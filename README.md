@@ -79,7 +79,7 @@ This modular design allows easy switching between different agents and experimen
 
 This project is licensed under the [MIT License](LICENSE).  
 
-Copyright (c) 2024 **Razvan Nica** (dafaqboomduck)
+Copyright (c) 2025 **Razvan Nica** (dafaqboomduck)
 
 You are free to use, modify, and distribute this software in accordance with the terms of the license.  
 The software is provided **“as is”**, without warranty of any kind.  
